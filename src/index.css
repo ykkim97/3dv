@@ -1,0 +1,107 @@
+:root {
+  --bg-0: #0b0d13;
+  --bg-1: #121421;
+  --panel: #0f1118;
+  --panel-2: #151829;
+  --border: rgba(255,255,255,0.06);
+  --text: #e8eaf6;
+  --muted: #98a2b3;
+  --accent: #1f6feb;
+  --accent-2: #1fbf7a;
+  --warn: #f6a623;
+  --glass: rgba(255,255,255,0.02);
+  --radius: 8px;
+  --base-font: 13px;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root { height: 100%; width: 100%; }
+
+body {
+  margin: 0;
+  background: radial-gradient(1200px 600px at 20% -10%, #1c1f33 0%, var(--bg-0) 60%) fixed;
+  color: var(--text);
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  font-size: var(--base-font);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Canvas should fill its container */
+canvas { display: block; width: 100%; height: 100%; }
+
+/* Buttons */
+button {
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  background: linear-gradient(180deg, #22263a 0%, #1a1d2e 100%);
+  cursor: pointer;
+}
+button:hover { filter: brightness(1.06); }
+button:active { filter: brightness(0.96); }
+
+/* Icon-style small square buttons (used for left icon bar and mesh icons) */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  padding: 6px;
+  background: transparent;
+  border: 1px solid var(--border);
+  cursor: pointer;
+}
+.icon-btn:focus { outline: none; box-shadow: 0 0 0 3px rgba(100,108,255,0.12); }
+
+/* small circular variant */
+.icon-btn-circle {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+}
+
+/* Mesh add icon appearance */
+.icon-btn .svg { width: 18px; height: 18px; fill: currentColor; }
+
+/* Inputs - nicer, compact */
+.input {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.02);
+  color: var(--text);
+  font-size: 13px;
+}
+.input:focus { outline: none; box-shadow: 0 0 0 3px rgba(100,108,255,0.06); border-color: rgba(100,108,255,0.12); }
+
+/* Inspector specific */
+.inspector-label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+.inspector-section { margin-bottom: 12px; }
+.inspector-group { display: flex; gap: 8px; }
+.inspector-input { width: 100%; }
+
+/* Mesh list item refinement */
+.list-item {
+  padding: 10px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.02);
+  margin-bottom: 8px;
+  transition: background 120ms;
+}
+.list-item:hover { background: rgba(255,255,255,0.03); }
+.list-item .subtitle { font-size: 12px; color: var(--muted); margin-top: 6px; }
+
+/* Topbar small adjustments */
+.topbar-title { font-weight: 800; letter-spacing: 0.2px; font-size: 14px; }
+.topbar-sub { font-size: 12px; color: var(--muted); margin-left: 6px; }
+
+/* small helper */
+.small { font-size: 12px; }
