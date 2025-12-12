@@ -13,7 +13,7 @@ import { PointerEventTypes } from "@babylonjs/core/Events/pointerEvents";
 import "@babylonjs/loaders";
 import { createMeta } from "./MeshEntities";
 import { GridMaterial } from "@babylonjs/materials";
-
+import AxesHelper from "./AxesHelper";
 export default class SceneProject {
   constructor({ id, name, initialJSON = null }) {
     this.id = id || `scene-${Date.now()}`;
@@ -39,6 +39,9 @@ export default class SceneProject {
     this._gridMesh = null;
     this._gridMaterial = null;
     this._gridVisible = false;
+
+    // 축
+    this._axesHelper = null;
 
     if (initialJSON) {
       this._loadMetaFromJSON(initialJSON);
@@ -73,6 +76,8 @@ export default class SceneProject {
     } catch (e) {
       this.highlightLayer = null;
     }
+
+    this._axesHelper = new AxesHelper(this.scene, 2); // 길이 2, 필요하면 값 변경
 
     // create runtime meshes from meta map
     for (const meta of this.meshMetaMap.values()) this._createRuntimeMesh(meta);
@@ -129,6 +134,8 @@ export default class SceneProject {
     try {
       if (this.highlightLayer) { try { this.highlightLayer.dispose(); } catch {} ; this.highlightLayer = null; }
     } catch {}
+
+    if (this._axesHelper) { try { this._axesHelper.dispose(); } catch {} ; this._axesHelper = null; }
     if (this._gridMesh) { try { this._gridMesh.dispose(); } catch {} ; this._gridMesh = null; }
     if (this._gridMaterial) { try { this._gridMaterial.dispose(); } catch {} ; this._gridMaterial = null; }
 
