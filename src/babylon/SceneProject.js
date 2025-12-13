@@ -1,19 +1,19 @@
 // src/babylon/SceneProject.js
-import { Engine } from "@babylonjs/core/Engines/engine";
-import { Scene } from "@babylonjs/core/scene";
 import { ArcRotateCamera } from "@babylonjs/core/Cameras/arcRotateCamera";
+import { Engine } from "@babylonjs/core/Engines/engine";
+import { PointerEventTypes } from "@babylonjs/core/Events/pointerEvents";
+import { HighlightLayer } from "@babylonjs/core/Layers/highlightLayer";
 import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
-import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
-import { Vector3 } from "@babylonjs/core/Maths/math.vector";
-import { Color3 } from "@babylonjs/core/Maths/math.color";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { DynamicTexture } from "@babylonjs/core/Materials/Textures/dynamicTexture";
-import { HighlightLayer } from "@babylonjs/core/Layers/highlightLayer";
-import { PointerEventTypes } from "@babylonjs/core/Events/pointerEvents";
+import { Color3 } from "@babylonjs/core/Maths/math.color";
+import { Vector3 } from "@babylonjs/core/Maths/math.vector";
+import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
+import { Scene } from "@babylonjs/core/scene";
 import "@babylonjs/loaders";
-import { createMeta } from "./MeshEntities";
 import { GridMaterial } from "@babylonjs/materials";
 import AxesHelper from "./AxesHelper";
+import { createMeta } from "./MeshEntities";
 export default class SceneProject {
   constructor({ id, name, initialJSON = null }) {
     this.id = id || `scene-${Date.now()}`;
@@ -42,6 +42,7 @@ export default class SceneProject {
 
     // 축
     this._axesHelper = null;
+    this._axesVisible = true; // 기본 on; App에서 툴 상태로 제어
 
     if (initialJSON) {
       this._loadMetaFromJSON(initialJSON);
@@ -64,7 +65,7 @@ export default class SceneProject {
     this.engine = new Engine(this.canvas, true, { preserveDrawingBuffer: true, stencil: true });
     this.scene = new Scene(this.engine);
 
-    this.camera = new ArcRotateCamera("camera-" + this.id, Math.PI / 4, Math.PI / 3, 6, Vector3.Zero(), this.scene);
+    this.camera = new ArcRotateCamera("camera-" + this.id, Math.PI / 4, Math.PI / 3, 50, Vector3.Zero(), this.scene);
     this.camera.attachControl(this.canvas, true);
 
     const hemi = new HemisphericLight("light-" + this.id, new Vector3(0, 1, 0), this.scene);
@@ -84,6 +85,10 @@ export default class SceneProject {
 
     // if grid requested earlier, create now
     if (this._gridVisible) this._createGrid();
+    // only create axes if requested
+    if (this._axesVisible) {
+      try { this._axesHelper = new AxesHelper(this.scene, 8); } catch (e) { this._axesHelper = null; }
+    }
 
     // pointer pick handling
     this.scene.onPointerObservable.add((pi) => {
@@ -232,6 +237,42 @@ export default class SceneProject {
       return;
     }
 
+    if (type === "splitMerged" || type === "splitMesh") {
+      const { id } = payload;
+      const meta = this.meshMetaMap.get(id);
+      if (!meta || meta.kind !== "merged") return;
+      const mergedIds = Array.isArray(meta.params?.mergedIds) ? meta.params.mergedIds : [];
+      const original = meta.params?.originalParents || {};
+
+      // restore meta parent links and runtime parents for each child
+      for (const childId of mergedIds) {
+        const childMeta = this.meshMetaMap.get(childId);
+        if (childMeta) {
+          childMeta.parent = original[childId] || null;
+          const childRuntime = this.meshMap.get(childId);
+          const newParentRuntime = original[childId] ? this.meshMap.get(original[childId]) : null;
+          if (childRuntime) {
+            try { childRuntime.parent = newParentRuntime || null; } catch {}
+          }
+        }
+      }
+
+      // dispose and remove the group runtime node (TransformNode)
+      const groupRuntime = this.meshMap.get(id);
+      if (groupRuntime) {
+        try { groupRuntime.dispose(); } catch {}
+        this.meshMap.delete(id);
+      }
+
+      // remove the merged meta
+      this.meshMetaMap.delete(id);
+
+      // if we had selection on the merged id, clear selection
+      if (this._selectedId === id) this._selectMeshById(null);
+
+      return;
+    }
+
     console.warn("Unknown command:", type);
   }
 
@@ -347,6 +388,28 @@ export default class SceneProject {
 
   clearAllHighlights() { this._selectMeshById(null); }
 
+  // 축 표시 제어
+  setAxesVisible(visible) {
+    const want = !!visible;
+    this._axesVisible = want;
+    if (!this.scene) return;
+    if (want) {
+      if (!this._axesHelper) {
+        try { this._axesHelper = new AxesHelper(this.scene, 8); } catch (e) { this._axesHelper = null; }
+      } else {
+        this._axesHelper.setVisible(true);
+      }
+    } else {
+      if (this._axesHelper) {
+        try { this._axesHelper.dispose(); } catch (e) {}
+        this._axesHelper = null;
+      }
+    }
+  }
+
+  // 축 표시 상태 반환
+  isAxesVisible() { return !!this._axesVisible; }
+
   // Grid: create a textured plane with repeated dynamic texture for performance
   _createGrid() {
     if (!this.scene) return;
@@ -393,6 +456,10 @@ export default class SceneProject {
     mat.gridRatio = 1;             // 한 셀의 크기 (1 = 1 world unit)
     mat.backFaceCulling = false;
     mat.opacity = 1;
+    // gentler colors: dark background + desaturated lines
+    mat.mainColor = new Color3(0.03, 0.03, 0.04); // very dark base
+    mat.lineColor = new Color3(0.20, 0.28, 0.30); // muted teal/grayish
+    mat.lineColor2 = new Color3(0.14, 0.18, 0.20); // second line tone if supported
 
     const grid = MeshBuilder.CreateGround(`grid-${this.id}`, { width: size, height: size, subdivisions: 1 }, this.scene);
     grid.material = mat;

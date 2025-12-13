@@ -1,5 +1,5 @@
 #root {
-  max-width: 1280px;
+  max-width: 1920px;
   margin: 0 auto;
   padding: 2rem;
   text-align: center;
@@ -40,3 +40,185 @@
 .read-the-docs {
   color: #888;
 }
+
+/* Sidebar / Left panel refinements (adjusted for larger center view) */
+.sidebar {
+  display: flex;
+  width: 300px; /* reduced from 360 -> gives more center space */
+  border-right: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+  gap: 0;
+  align-items: stretch;
+}
+
+.sidebar-icons {
+  width: 56px; /* slightly narrower */
+  background: linear-gradient(180deg,#0f1118,#0c0f15);
+  border-right: 1px solid rgba(255,255,255,0.03);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px 6px; /* reduced padding */
+  gap: 12px;
+}
+
+.sidebar-icons .icon-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  padding: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  transition: transform 140ms ease, box-shadow 140ms ease;
+}
+.sidebar-icons .icon-btn:hover { transform: translateY(-3px); box-shadow: 0 6px 18px rgba(0,0,0,0.6); }
+.sidebar-icons .icon-btn.active { box-shadow: 0 6px 20px rgba(100,108,255,0.14); background: rgba(100,108,255,0.06); }
+
+.sidebar-panel {
+  flex: 1;
+  padding: 12px; /* reduced from 18 */
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: auto;
+}
+
+/* Panel header (title + small control group) */
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.panel-header h2 { margin: 0; font-size: 15px; font-weight: 700; letter-spacing: 0.2px; }
+
+/* Tools card */
+.tools-card {
+  background: linear-gradient(180deg, rgba(255,255,255,0.015), rgba(255,255,255,0.01));
+  border-radius: 12px;
+  padding: 12px;
+  border: 1px solid rgba(255,255,255,0.03);
+  box-shadow: 0 6px 16px rgba(2,6,23,0.6);
+}
+.tools-row { display:flex; gap:12px; align-items:center; }
+
+/* Scene header (above canvas) */
+.scene-header {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  background: rgba(8,10,16,0.6);
+  padding: 6px 10px;
+  border-radius: 10px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.6);
+}
+.scene-btn {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.03);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+  transition: transform 120ms ease, background 120ms ease, box-shadow 120ms ease;
+}
+.scene-btn svg { opacity: 0.95; }
+.scene-btn span { line-height: 1; }
+.scene-btn:hover { transform: translateY(-3px); background: rgba(255,255,255,0.02); box-shadow: 0 6px 18px rgba(0,0,0,0.55); }
+.scene-btn.active { background: rgba(78,119,255,0.08); box-shadow: 0 6px 18px rgba(78,119,255,0.06); border-color: rgba(78,119,255,0.14); }
+.scene-divider { width: 1px; height: 22px; background: rgba(255,255,255,0.04); margin: 0 6px; }
+
+/* Scenes / Meshes lists */
+.scene-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px;
+  border-radius: 10px;
+  margin-bottom: 8px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.008));
+  border: 1px solid rgba(255,255,255,0.02);
+}
+.scene-item:hover { transform: translateY(-2px); box-shadow: 0 6px 14px rgba(0,0,0,0.5); }
+.scene-item .meta { text-align: left; }
+.scene-item .meta .title { font-weight: 700; font-size: 14px; }
+.scene-item .meta .sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+/* Mesh add buttons group style */
+.add-collection {
+  display:flex;
+  gap:10px;
+  align-items:center;
+  margin-bottom: 12px;
+}
+.add-collection .icon-btn {
+  width:44px;
+  height:44px;
+  border-radius:10px;
+  padding:8px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.45);
+  transition: transform 120ms, filter 120ms;
+}
+.add-collection .icon-btn:hover { transform: translateY(-3px); filter: brightness(1.06); }
+
+/* Mesh list container */
+.mesh-list-card {
+  margin-top: 6px;
+  border-radius: 10px;
+  padding: 10px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.008), rgba(255,255,255,0.006));
+  border: 1px solid rgba(255,255,255,0.02);
+}
+
+/* Inspector left/right spacing tweaks for readable UI */
+.panel-controls { display:flex; gap:8px; align-items:center; }
+
+/* Responsive tweaks */
+@media (max-width: 1100px) {
+  .sidebar { width: 300px; }
+  .sidebar-icons { width: 56px; }
+  .add-collection .icon-btn { width:40px; height:40px; }
+}
+
+/* MeshList — more contrast + accordion visuals */
+.mesh-list-card {
+  padding: 6px;
+  max-width: 100%;
+  box-sizing: border-box;
+  background: linear-gradient(180deg, rgba(255,255,255,0.008), rgba(255,255,255,0.006));
+  border: 1px solid rgba(255,255,255,0.02);
+  border-radius: 8px;
+}
+
+.mesh-row {
+  transition: background 120ms ease, border 120ms ease;
+}
+.mesh-row:hover {
+  background: linear-gradient(90deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+  border: 1px solid rgba(255,255,255,0.03);
+}
+
+.mesh-name { color: #E8EDF6; }
+
+/* accordion chevron style handled inline, but add pointer cursor */
+.mesh-list-card button[aria-label] { cursor: pointer; }
+
+/* compact delete button */
+.mesh-delete-btn { width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; }
+
+/* child container separator */
+.tree-children { margin-left: 4px; padding-left: 6px; border-left: 1px dashed rgba(255,255,255,0.02); }

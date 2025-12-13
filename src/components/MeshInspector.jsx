@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 
 function NumberInput({ label, value, onChange, step = 0.1 }) {
   return (
@@ -26,7 +26,7 @@ function hexToColor3(hex) {
 }
 
 // 컴포넌트 시그니처: meshes prop 추가
-export default function MeshInspector({ meshMeta, meshes = [], onChange, onDelete }) {
+export default function MeshInspector({ meshMeta, meshes = [], onChange, onDelete, onUnmerge }) {
   const [local, setLocal] = useState(meshMeta || null);
   useEffect(() => setLocal(meshMeta ? { ...meshMeta } : null), [meshMeta]);
   if (!local) return <div style={{ padding: 12, color: "#ddd" }}>Select a mesh to edit</div>;
@@ -49,6 +49,12 @@ export default function MeshInspector({ meshMeta, meshes = [], onChange, onDelet
         <div>
           <h3 style={{ margin: 0 }}>{local.name}</h3>
           <div style={{ fontSize: 12, color: "var(--muted)" }}>{local.id}</div>
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          {local.kind === "merged" && typeof onUnmerge === "function" ? (
+            <button onClick={() => onUnmerge(local.id)} style={{ padding: "6px 10px", background: "#6b9bff", border: "none", color: "#fff", borderRadius: 8, marginRight: 6 }}>Unmerge</button>
+          ) : null}
+          <button onClick={() => onDelete && onDelete(local.id)} style={{ padding: "6px 10px", background: "#ff6b6b", border: "none", color: "#fff", borderRadius: 8 }}>Delete</button>
         </div>
         <button onClick={() => onDelete && onDelete(local.id)} style={{ padding: "6px 10px", background: "#ff6b6b", border: "none", color: "#fff", borderRadius: 8 }}>Delete</button>
       </div>

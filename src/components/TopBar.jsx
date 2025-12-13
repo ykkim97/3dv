@@ -1,7 +1,6 @@
 // src/components/TopBar.jsx
-import React from "react";
 
-export default function TopBar({ onToggleGrid, gridVisible }) {
+export default function TopBar({ onToggleGrid, gridVisible, onToggleHeader, headerVisible }) {
   return (
     <header
       style={{
@@ -28,9 +27,20 @@ export default function TopBar({ onToggleGrid, gridVisible }) {
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+
         <button
-          title="Toggle Grid"
-          onClick={() => onToggleGrid && onToggleGrid()}
+          title={headerVisible ? "Hide scene header" : "Show scene header"}
+          onClick={() => onToggleHeader && onToggleHeader()}
+          className="icon-btn icon-btn-circle"
+          style={{ background: headerVisible ? "rgba(100,108,255,0.08)" : "transparent" }}
+        >
+          {headerVisible ? (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 7h16v2H4zM4 11h16v2H4zM4 15h16v2H4z" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          ) : (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M5 7h14M5 12h14M5 17h14" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" opacity="0.4"/></svg>
+          )}
+        </button>
+        <button
           className="icon-btn icon-btn-circle"
           style={{ background: gridVisible ? "rgba(100,108,255,0.12)" : "transparent" }}
         >
@@ -42,7 +52,7 @@ export default function TopBar({ onToggleGrid, gridVisible }) {
             <rect x="14" y="14" width="7" height="7" stroke="currentColor" strokeWidth="1.2" />
           </svg>
         </button>
-        <div style={{ width: 8 }} />
+        
       </div>
     </header>
   );

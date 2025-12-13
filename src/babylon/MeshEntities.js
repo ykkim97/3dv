@@ -14,6 +14,14 @@ export class MeshMeta {
   }
 }
 
+// add this MergedMeta class near the other Meta classes
+export class MergedMeta extends MeshMeta {
+  constructor(opts = {}) {
+    // params should contain: { mergedIds: [...], originalParents: { id: parentId|null } }
+    const params = { mergedIds: (opts.params && opts.params.mergedIds) || [], originalParents: (opts.params && opts.params.originalParents) || {}, ...((opts.params) || {}) };
+    super({ kind: "merged", params, ...opts });
+  }
+}
 export class BoxMeta extends MeshMeta {
   constructor(opts = {}) {
     super({ kind: "box", params: { size: 1, ...opts.params }, ...opts });
@@ -56,5 +64,6 @@ export function createMeta(kind, opts = {}) {
   if (kind === "cylinder") return new CylinderMeta(base);
   if (kind === "cone") return new ConeMeta(base);
   if (kind === "line") return new LineMeta(base);
+  if (kind === "merged") return new MergedMeta(base);
   return new MeshMeta({ kind, ...base });
 }
