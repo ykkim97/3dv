@@ -1,6 +1,6 @@
 // src/components/TopBar.jsx
 
-export default function TopBar({ onToggleGrid, gridVisible, onToggleHeader, headerVisible }) {
+export default function TopBar({ onToggleGrid, gridVisible, onToggleHeader, headerVisible, onImport, onToggleGizmo, gizmoVisible }) {
   return (
     <header
       style={{
@@ -29,6 +29,15 @@ export default function TopBar({ onToggleGrid, gridVisible, onToggleHeader, head
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
 
         <button
+          title="Import Scene"
+          onClick={() => onImport && onImport()}
+          className="icon-btn"
+          style={{ background: "transparent", border: "none", padding: "6px 8px", color: "var(--text)" }}
+        >
+          Import
+        </button>
+
+        <button
           title={headerVisible ? "Hide scene header" : "Show scene header"}
           onClick={() => onToggleHeader && onToggleHeader()}
           className="icon-btn icon-btn-circle"
@@ -42,6 +51,8 @@ export default function TopBar({ onToggleGrid, gridVisible, onToggleHeader, head
         </button>
         <button
           className="icon-btn icon-btn-circle"
+          onClick={() => onToggleGrid && onToggleGrid()}
+          title="Toggle Grid"
           style={{ background: gridVisible ? "rgba(100,108,255,0.12)" : "transparent" }}
         >
           {/* simple grid icon */}
@@ -51,6 +62,14 @@ export default function TopBar({ onToggleGrid, gridVisible, onToggleHeader, head
             <rect x="3" y="14" width="7" height="7" stroke="currentColor" strokeWidth="1.2" />
             <rect x="14" y="14" width="7" height="7" stroke="currentColor" strokeWidth="1.2" />
           </svg>
+        </button>
+        <button
+          title={gizmoVisible ? "Hide gizmo" : "Show gizmo"}
+          onClick={() => onToggleGizmo && onToggleGizmo()}
+          className="icon-btn icon-btn-circle"
+          style={{ background: gizmoVisible ? "rgba(100,108,255,0.12)" : "transparent" }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2v6M12 22v-6M2 12h6M22 12h-6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
         </button>
         
       </div>

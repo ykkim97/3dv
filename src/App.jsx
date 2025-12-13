@@ -51,6 +51,16 @@ export default function App() {
 
   const getCurrentInstance = () => sceneInstanceMap.current.get(currentSceneId);
 
+  const [gizmoVisible, setGizmoVisible] = useState(true);
+  const toggleGizmo = () => {
+    const next = !gizmoVisible;
+    setGizmoVisible(next);
+    const inst = getCurrentInstance();
+    if (inst && typeof inst.setGizmoVisible === 'function') inst.setGizmoVisible(next);
+  };
+
+  const [selectedIds, setSelectedIds] = useState(new Set());
+
   const handleSceneReady = useCallback(
     (sceneId, sp) => {
       // store instance
@@ -64,13 +74,22 @@ export default function App() {
         forceRerender((n) => n + 1);
       });
 
-      // apply current grid/axes visibility to scene
+      // register runtime-change callback so gizmo-driven transforms update the UI
+      if (typeof sp.setChangeCallback === 'function') {
+        sp.setChangeCallback((meshId) => {
+          // if inspector currently showing this mesh, force an update
+          forceRerender((n) => n + 1);
+        });
+      }
+
+      // apply current grid/axes/gizmo visibility to scene
       sp.setGridVisible(gridVisible);
       sp.setAxesVisible(axesVisible);
+      if (typeof sp.setGizmoVisible === 'function') sp.setGizmoVisible(gizmoVisible);
 
       forceRerender((n) => n + 1);
     },
-    [gridVisible, axesVisible]
+    [gridVisible, axesVisible, gizmoVisible]
   );
 
   const toggleAxes = () => {
@@ -79,6 +98,7 @@ export default function App() {
     const inst = getCurrentInstance();
     if (inst) inst.setAxesVisible(next);
   };
+  
 
   const saveSceneToJSON = (id) => {
     const instance = sceneInstanceMap.current.get(id);
@@ -335,17 +355,196 @@ export default function App() {
   const currentInstance = sceneInstanceMap.current.get(currentSceneId);
   const meshList = currentInstance ? currentInstance.getMeshMetaList() : currentScene?.json?.meshes || [];
   const selectedMeshMeta = meshList ? meshList.find((m) => m.id === selectedMeshId) : null;
-  const [selectedIds, setSelectedIds] = useState(new Set());
+  
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importJson, setImportJson] = useState(null);
+  const [importFileName, setImportFileName] = useState("");
+  const [importTarget, setImportTarget] = useState("new"); // 'new' | 'replace'
+  const [importDebug, setImportDebug] = useState(false);
+
+  const fileInputRef = useRef(null);
+
+  const triggerImport = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.value = null;
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleImportFile = (ev) => {
+    const f = ev.target.files && ev.target.files[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const json = JSON.parse(reader.result);
+        setImportJson(json);
+        setImportFileName(f.name || "import.json");
+        setImportTarget(currentSceneId ? "replace" : "new");
+        setShowImportModal(true);
+      } catch (err) {
+        console.error(err);
+        alert("Failed to parse JSON file. Make sure it's a valid scene export.");
+      }
+    };
+    reader.readAsText(f);
+  };
+
+  const handleDrop = (ev) => {
+    ev.preventDefault();
+    setIsDragOver(false);
+    const f = ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files[0];
+    if (!f) return;
+    if (!/\.json$/i.test(f.name)) {
+      alert("Please drop a JSON file.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const json = JSON.parse(reader.result);
+        setImportJson(json);
+        setImportFileName(f.name || "import.json");
+        setImportTarget(currentSceneId ? "replace" : "new");
+        setShowImportModal(true);
+      } catch (err) {
+        console.error(err);
+        alert("Failed to parse JSON file. Make sure it's a valid scene export.");
+      }
+    };
+    reader.readAsText(f);
+  };
+
+  const applyImport = () => {
+    if (!importJson) return;
+    const json = importJson;
+    const id = json.id || `scene-import-${Date.now()}`;
+    const name = json.name || importFileName.replace(/\.[^/.]+$/, "") || `Imported Scene`;
+
+    if (importDebug) console.log("applyImport called", { importTarget, importFileName, currentSceneId, jsonMeshes: (json.meshes || []).length });
+
+    if (importTarget === "replace") {
+      // Replace meshes of current scene (if instance attached), otherwise replace stored scene JSON
+      if (currentSceneId) {
+        const inst = sceneInstanceMap.current.get(currentSceneId);
+        if (inst) {
+          const importedMeshes = Array.isArray(json.meshes) ? json.meshes : [];
+          // remove all existing meshes then create imported ones for a clean replace
+          try {
+            const existing = inst.getMeshMetaList();
+            for (const m of existing) {
+              inst.enqueueCommand({ type: "removeMesh", payload: { id: m.id } });
+            }
+          } catch (e) { /* ignore */ }
+          for (const m of importedMeshes) {
+            const payload = { kind: m.kind, params: m.params, position: m.position, rotation: m.rotation, scaling: m.scaling, id: m.id, name: m.name || m.id, material: m.material, parent: m.parent };
+            inst.enqueueCommand({ type: "createMesh", payload });
+          }
+
+          // update scenes[] json for persistence
+          const scenesCopy = [...scenes];
+          const sceneIndex = scenesCopy.findIndex(s => s.id === currentSceneId);
+          if (sceneIndex >= 0) {
+            scenesCopy[sceneIndex] = { ...scenesCopy[sceneIndex], json: { ...(scenesCopy[sceneIndex].json || {}), meshes: importedMeshes } };
+            setScenes(scenesCopy);
+          }
+        } else {
+          // instance not attached: update stored scene JSON directly
+          const importedMeshes = Array.isArray(json.meshes) ? json.meshes : [];
+          const scenesCopy = [...scenes];
+          const sceneIndex = scenesCopy.findIndex(s => s.id === currentSceneId);
+          if (sceneIndex >= 0) {
+            scenesCopy[sceneIndex] = { ...scenesCopy[sceneIndex], json: { ...(scenesCopy[sceneIndex].json || {}), meshes: importedMeshes } };
+            setScenes(scenesCopy);
+          } else {
+            const sceneMeta = { id, name, json };
+            setScenes((prev) => [...prev, sceneMeta]);
+            setCurrentSceneId(id);
+          }
+        }
+      } else {
+        // no current scene: add as new
+        const sceneMeta = { id, name, json };
+        setScenes((prev) => [...prev, sceneMeta]);
+        setCurrentSceneId(id);
+      }
+    } else {
+      // default: add as new scene
+      const sceneMeta = { id, name, json };
+      setScenes((prev) => [...prev, sceneMeta]);
+      setCurrentSceneId(id);
+    }
+
+    setShowImportModal(false);
+    setImportJson(null);
+    setImportFileName("");
+  };
+
+  const cancelImport = () => {
+    setShowImportModal(false);
+    setImportJson(null);
+    setImportFileName("");
+  };
+
+  const handleDragOver = (ev) => {
+    ev.preventDefault();
+  };
+
+  const handleDragEnter = (ev) => { ev.preventDefault(); setIsDragOver(true); };
+  const handleDragLeave = (ev) => { ev.preventDefault(); setIsDragOver(false); };
 
   return (
-    <div style={{ height: "100vh", display: "flex", flexDirection: "column" }}>
+    <div
+      style={{ height: "100vh", display: "flex", flexDirection: "column" }}
+      onDrop={handleDrop}
+      onDragOver={handleDragOver}
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+    >
       <TopBar
         onToggleGrid={toggleGrid}
         gridVisible={gridVisible}
         onToggleHeader={() => setSceneHeaderVisible(v => !v)}
         headerVisible={sceneHeaderVisible}
+        onImport={triggerImport}
+        onToggleGizmo={toggleGizmo}
+        gizmoVisible={gizmoVisible}
       />
+      <input ref={fileInputRef} type="file" accept="application/json" style={{ display: "none" }} onChange={handleImportFile} />
       <div style={{ flex: 1, display: "flex", alignItems: "stretch" }}>
+        {isDragOver && (
+          <div style={{ position: "fixed", inset: 0, zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
+            <div style={{ pointerEvents: "auto", background: "rgba(0,0,0,0.7)", color: "#fff", padding: 18, borderRadius: 8, boxShadow: "0 10px 40px rgba(0,0,0,0.6)" }}>
+              Drop JSON file to import. (OK = Overwrite current scene, Cancel = Add as new scene)
+            </div>
+          </div>
+        )}
+        {showImportModal && (
+          <div style={{ position: "fixed", inset: 0, zIndex: 120, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.5)" }}>
+            <div style={{ width: 480, background: "var(--panel)", padding: 18, borderRadius: 10, boxShadow: "0 20px 60px rgba(0,0,0,0.6)", color: "#fff" }}>
+              <h3 style={{ marginTop: 0 }}>Import Scene</h3>
+              <div style={{ marginBottom: 8, color: "var(--muted)" }}>File: {importFileName}</div>
+                    <div style={{ marginBottom: 8 }}>
+                      <label style={{ display: "block", marginBottom: 6 }}>Upload action</label>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <label><input type="radio" name="importTarget" checked={importTarget === 'new'} onChange={() => setImportTarget('new')} /> Add as new scene</label>
+                        <label><input type="radio" name="importTarget" checked={importTarget === 'replace'} onChange={() => setImportTarget('replace')} /> Replace current scene</label>
+                      </div>
+                    </div>
+              <div style={{ marginTop: 8 }}>
+                <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <input type="checkbox" checked={importDebug} onChange={(e) => setImportDebug(e.target.checked)} />
+                  <span style={{ fontSize: 13, color: 'var(--muted)' }}>Verbose import logging</span>
+                </label>
+              </div>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
+                <button onClick={cancelImport} style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.06)", padding: "8px 12px" }}>Cancel</button>
+                <button onClick={applyImport} style={{ background: "var(--accent)", border: "none", padding: "8px 12px" }}>Import</button>
+              </div>
+            </div>
+          </div>
+        )}
         {/* LEFT: Icon bar + panel (refactored) */}
         <aside className="sidebar" role="complementary" aria-label="Left sidebar">
           <div className="sidebar-icons" aria-hidden>

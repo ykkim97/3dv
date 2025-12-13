@@ -12,6 +12,7 @@ import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
 import { Scene } from "@babylonjs/core/scene";
 import "@babylonjs/loaders";
 import { GridMaterial } from "@babylonjs/materials";
+import { GizmoManager } from "@babylonjs/core/Gizmos/gizmoManager";
 import AxesHelper from "./AxesHelper";
 import { createMeta } from "./MeshEntities";
 export default class SceneProject {
@@ -39,6 +40,11 @@ export default class SceneProject {
     this._gridMesh = null;
     this._gridMaterial = null;
     this._gridVisible = false;
+    this._gridSize = 2000; // world units for grid and axes default
+    this._gizmoManager = null;
+    this._snapEnabled = false;
+    this._snapValue = 1;
+    
 
     // 축
     this._axesHelper = null;
@@ -78,7 +84,7 @@ export default class SceneProject {
       this.highlightLayer = null;
     }
 
-    this._axesHelper = new AxesHelper(this.scene, 2); // 길이 2, 필요하면 값 변경
+    this._axesHelper = new AxesHelper(this.scene, this._gridSize); // 길이를 그리드 크기에 맞춤
 
     // create runtime meshes from meta map
     for (const meta of this.meshMetaMap.values()) this._createRuntimeMesh(meta);
@@ -87,7 +93,7 @@ export default class SceneProject {
     if (this._gridVisible) this._createGrid();
     // only create axes if requested
     if (this._axesVisible) {
-      try { this._axesHelper = new AxesHelper(this.scene, 8); } catch (e) { this._axesHelper = null; }
+      try { this._axesHelper = new AxesHelper(this.scene, this._gridSize); } catch (e) { this._axesHelper = null; }
     }
 
     // pointer pick handling
@@ -114,6 +120,14 @@ export default class SceneProject {
         }
       }
     });
+
+    // initialize gizmo manager for transform controls
+    try {
+      this._gizmoManager = new GizmoManager(this.scene);
+      this._gizmoManager.positionGizmoEnabled = true;
+      this._gizmoManager.rotationGizmoEnabled = true;
+      this._gizmoManager.scaleGizmoEnabled = true;
+    } catch (e) { this._gizmoManager = null; }
 
     this._running = true;
     this.engine.runRenderLoop(() => {
@@ -143,6 +157,7 @@ export default class SceneProject {
     if (this._axesHelper) { try { this._axesHelper.dispose(); } catch {} ; this._axesHelper = null; }
     if (this._gridMesh) { try { this._gridMesh.dispose(); } catch {} ; this._gridMesh = null; }
     if (this._gridMaterial) { try { this._gridMaterial.dispose(); } catch {} ; this._gridMaterial = null; }
+    if (this._gizmoManager) { try { this._gizmoManager.attachToMesh(null); } catch {} ; this._gizmoManager = null; }
 
     for (const mat of this.materialMap.values()) { try { mat.dispose(); } catch {} }
     this.materialMap.clear();
@@ -162,12 +177,39 @@ export default class SceneProject {
     }
   }
 
+  // snap a position object {x,y,z} to grid if snap enabled
+  _snapPosition(pos) {
+    if (!this._snapEnabled || !this._snapValue) return pos;
+    const s = this._snapValue;
+    return { x: Math.round(pos.x / s) * s, y: Math.round(pos.y / s) * s, z: Math.round(pos.z / s) * s };
+  }
+
+  setSnapEnabled(enabled) {
+    this._snapEnabled = !!enabled;
+    if (this._gizmoManager && this._gizmoManager.positionGizmo) {
+      try { this._gizmoManager.positionGizmo.snapDistance = this._snapEnabled ? this._snapValue : 0; } catch {}
+    }
+  }
+
+  setSnapValue(v) {
+    const val = Math.max(0.0001, Number(v) || 1);
+    this._snapValue = val;
+    if (this._gizmoManager && this._gizmoManager.positionGizmo) {
+      try { this._gizmoManager.positionGizmo.snapDistance = this._snapEnabled ? this._snapValue : 0; } catch {}
+    }
+  }
+
+  
+
   _applyCommand(cmd) {
     const { type, payload } = cmd;
     if (type === "createMesh") {
       const { kind, params = {}, position, rotation, scaling, id, name, material, parent } = payload;
       const meta = createMeta(kind, { id, name, params, parent, position, rotation, scaling, material });
       this.meshMetaMap.set(meta.id, meta);
+      try {
+        console.log("SceneProject: applyCommand createMesh", meta.id, "kind", meta.kind, "sceneReady", !!this.scene);
+      } catch (e) {}
       if (this.scene) this._createRuntimeMesh(meta);
       return;
     }
@@ -177,7 +219,7 @@ export default class SceneProject {
       const meta = this.meshMetaMap.get(id);
       if (!meta) return;
       if (changes.name !== undefined) meta.name = changes.name;
-      if (changes.position) Object.assign(meta.position, changes.position);
+      if (changes.position) Object.assign(meta.position, this._snapPosition(changes.position));
       if (changes.rotation) Object.assign(meta.rotation, changes.rotation);
       if (changes.scaling) Object.assign(meta.scaling, changes.scaling);
       if (changes.material) Object.assign(meta.material, changes.material);
@@ -208,6 +250,7 @@ export default class SceneProject {
           }
         }
         if (changes.material) this._applyMaterialToMesh(meta);
+        try { console.log("SceneProject: applied updateMesh", id, changes); } catch (e) {}
       }
       return;
     }
@@ -374,6 +417,16 @@ export default class SceneProject {
         try { this.highlightLayer.addMesh(m, Color3.FromInts(255, 200, 64)); } catch {}
       }
     }
+    // attach/detach gizmo to selected mesh
+    try {
+      if (this._gizmoManager) {
+        const attach = this._selectedId ? this.meshMap.get(this._selectedId) : null;
+        try { this._gizmoManager.attachToMesh(attach); } catch {}
+        if (this._gizmoManager.positionGizmo) {
+          try { this._gizmoManager.positionGizmo.snapDistance = this._snapEnabled ? this._snapValue : 0; } catch {}
+        }
+      }
+    } catch (e) {}
     // call callback
     if (typeof this.onSelect === "function") {
       try { this.onSelect(this._selectedId); } catch {}
@@ -395,7 +448,7 @@ export default class SceneProject {
     if (!this.scene) return;
     if (want) {
       if (!this._axesHelper) {
-        try { this._axesHelper = new AxesHelper(this.scene, 8); } catch (e) { this._axesHelper = null; }
+        try { this._axesHelper = new AxesHelper(this.scene, this._gridSize); } catch (e) { this._axesHelper = null; }
       } else {
         this._axesHelper.setVisible(true);
       }
@@ -414,23 +467,24 @@ export default class SceneProject {
   _createGrid() {
     if (!this.scene) return;
     if (this._gridMesh) return;
-
-    const size = 200; // world units
+    const size = this._gridSize; // world units (확대)
     const tile = 1; // tile repetition
 
     // create dynamic texture that draws grid lines
-    const texSize = 1024;
+    const dpi = window.devicePixelRatio || 1;
+    const texSize = Math.min(1024, Math.max(512, Math.floor(512 * dpi)));
     const dt = new DynamicTexture(`grid-dt-${this.id}`, { width: texSize, height: texSize }, this.scene, false);
     const ctx = dt.getContext();
     // background transparent-ish
     ctx.fillStyle = "rgba(0,0,0,0)";
     ctx.fillRect(0, 0, texSize, texSize);
-    // grid line color
-    ctx.strokeStyle = "rgba(255,255,255,0.06)";
+    // grid line color (slightly stronger for visibility)
+    ctx.strokeStyle = "rgba(255,255,255,0.08)";
     ctx.lineWidth = 1;
 
     // draw major lines every N pixels and minor lines
-    const majorEvery = 64;
+    // map majorEvery to texture pixels proportionally so lines remain visible at various DT sizes
+    const majorEvery = Math.max(32, Math.floor(texSize / 16));
     for (let x = 0; x <= texSize; x += 8) {
       ctx.beginPath();
       ctx.moveTo(x + 0.5, 0);
@@ -438,8 +492,8 @@ export default class SceneProject {
       ctx.stroke();
     }
     // emphasize major lines
-    ctx.strokeStyle = "rgba(255,255,255,0.10)";
-    ctx.lineWidth = 1.2;
+    ctx.strokeStyle = "rgba(255,255,255,0.18)";
+    ctx.lineWidth = 1.6;
     for (let x = 0; x <= texSize; x += majorEvery) {
       ctx.beginPath();
       ctx.moveTo(x + 0.5, 0);
@@ -451,15 +505,15 @@ export default class SceneProject {
     dt.update();
 
     const mat = new GridMaterial(`grid-mat-${this.id}`, this.scene);
-    mat.majorUnitFrequency = 10;    // 큰 눈금 간격 (world units)
-    mat.minorUnitVisibility = 0.35; // 작은 눈금 가시성(0..1)
-    mat.gridRatio = 1;             // 한 셀의 크기 (1 = 1 world unit)
+    mat.majorUnitFrequency = Math.max(10, Math.round(this._gridSize / 100));    // 큰 눈금 간격 (world units)
+    mat.minorUnitVisibility = 0.5; // 작은 눈금 가시성(0..1)
+    mat.gridRatio = Math.max(1, Math.round(this._gridSize / 100));             // 한 셀의 크기
     mat.backFaceCulling = false;
     mat.opacity = 1;
     // gentler colors: dark background + desaturated lines
     mat.mainColor = new Color3(0.03, 0.03, 0.04); // very dark base
-    mat.lineColor = new Color3(0.20, 0.28, 0.30); // muted teal/grayish
-    mat.lineColor2 = new Color3(0.14, 0.18, 0.20); // second line tone if supported
+    mat.lineColor = new Color3(0.45, 0.45, 0.45); // brighter primary line
+    mat.lineColor2 = new Color3(0.25, 0.28, 0.30); // second line tone
 
     const grid = MeshBuilder.CreateGround(`grid-${this.id}`, { width: size, height: size, subdivisions: 1 }, this.scene);
     grid.material = mat;
@@ -493,9 +547,23 @@ export default class SceneProject {
   serialize() {
     const meshes = [];
     for (const [, m] of this.meshMetaMap) {
+      // prefer live runtime values when available (gizmo or direct runtime changes)
+      const runtime = this.meshMap.get(m.id);
+      let position = { ...m.position };
+      let rotation = { ...m.rotation };
+      let scaling = { ...m.scaling };
+      if (runtime) {
+        try {
+          if (runtime.position) position = { x: runtime.position.x, y: runtime.position.y, z: runtime.position.z };
+          if (runtime.rotation) rotation = { x: runtime.rotation.x, y: runtime.rotation.y, z: runtime.rotation.z };
+          if (runtime.scaling) scaling = { x: runtime.scaling.x, y: runtime.scaling.y, z: runtime.scaling.z };
+        } catch (e) {
+          // fallback to meta values on error
+        }
+      }
       meshes.push({
         id: m.id, name: m.name, kind: m.kind, params: m.params, parent: m.parent,
-        position: { ...m.position }, rotation: { ...m.rotation }, scaling: { ...m.scaling },
+        position, rotation, scaling,
         material: { ...m.material }
       });
     }
@@ -517,6 +585,29 @@ export default class SceneProject {
       for (const meta of this.meshMetaMap.values()) {
         if (!this.meshMap.has(meta.id)) this._createRuntimeMesh(meta);
         else this._applyMaterialToMesh(meta);
+      }
+    }
+  }
+
+  // Replace existing meshes (runtime + meta) with those from JSON while keeping the engine/camera state.
+  replaceWithJSON(json) {
+    if (!json) return;
+    // dispose existing runtime meshes and materials
+    for (const m of this.meshMap.values()) { try { m.dispose(); } catch {} }
+    for (const mat of this.materialMap.values()) { try { mat.dispose(); } catch {} }
+    this.meshMap.clear();
+    this.materialMap.clear();
+    this.meshMetaMap.clear();
+
+    // load new metas
+    this._loadMetaFromJSON(json);
+
+    // create runtime meshes if scene exists
+    if (this.scene) {
+      for (const meta of this.meshMetaMap.values()) {
+        try {
+          this._createRuntimeMesh(meta);
+        } catch (e) { console.error("Failed to create runtime mesh:", e); }
       }
     }
   }
