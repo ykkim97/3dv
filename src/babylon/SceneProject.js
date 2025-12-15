@@ -6,7 +6,7 @@ import { HighlightLayer } from "@babylonjs/core/Layers/highlightLayer";
 import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { DynamicTexture } from "@babylonjs/core/Materials/Textures/dynamicTexture";
-import { Color3 } from "@babylonjs/core/Maths/math.color";
+import { Color3, Color4 } from "@babylonjs/core/Maths/math.color";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
 import { Scene } from "@babylonjs/core/scene";
@@ -44,6 +44,7 @@ export default class SceneProject {
     this._gizmoManager = null;
     this._snapEnabled = false;
     this._snapValue = 1;
+    this._cameraKeyboardEnabled = true;
     
 
     // 축
@@ -70,9 +71,14 @@ export default class SceneProject {
     if (!this.canvas) throw new Error("Canvas required to initialize engine");
     this.engine = new Engine(this.canvas, true, { preserveDrawingBuffer: true, stencil: true });
     this.scene = new Scene(this.engine);
+    // match scene background to the (dark) grid main color for seamless look
+    try { this.scene.clearColor = new Color4(0.03, 0.03, 0.04, 1); } catch (e) {}
 
     this.camera = new ArcRotateCamera("camera-" + this.id, Math.PI / 4, Math.PI / 3, 50, Vector3.Zero(), this.scene);
     this.camera.attachControl(this.canvas, true);
+
+    // apply keyboard control state if needed
+    try { if (!this._cameraKeyboardEnabled) this.setCameraKeyboardEnabled(false); } catch (e) {}
 
     const hemi = new HemisphericLight("light-" + this.id, new Vector3(0, 1, 0), this.scene);
     hemi.intensity = 0.95;
@@ -319,6 +325,26 @@ export default class SceneProject {
     console.warn("Unknown command:", type);
   }
 
+  // Enable/disable camera keyboard inputs (arrow keys) to avoid conflicts with app shortcuts
+  setCameraKeyboardEnabled(enabled) {
+    this._cameraKeyboardEnabled = !!enabled;
+    try {
+      if (!this.camera) return;
+      if (!this._cameraKeyboardEnabled) {
+        this.camera.keysUp = [];
+        this.camera.keysDown = [];
+        this.camera.keysLeft = [];
+        this.camera.keysRight = [];
+      } else {
+        // default arrow keys
+        this.camera.keysUp = [38];
+        this.camera.keysDown = [40];
+        this.camera.keysLeft = [37];
+        this.camera.keysRight = [39];
+      }
+    } catch (e) {}
+  }
+
   _createRuntimeMesh(meta) {
     let mesh;
     if (meta.kind === "box") mesh = MeshBuilder.CreateBox(meta.id, meta.params, this.scene);
@@ -470,50 +496,64 @@ export default class SceneProject {
     const size = this._gridSize; // world units (확대)
     const tile = 1; // tile repetition
 
-    // create dynamic texture that draws grid lines
-    const dpi = window.devicePixelRatio || 1;
-    const texSize = Math.min(1024, Math.max(512, Math.floor(512 * dpi)));
-    const dt = new DynamicTexture(`grid-dt-${this.id}`, { width: texSize, height: texSize }, this.scene, false);
-    const ctx = dt.getContext();
-    // background transparent-ish
-    ctx.fillStyle = "rgba(0,0,0,0)";
-    ctx.fillRect(0, 0, texSize, texSize);
-    // grid line color (slightly stronger for visibility)
-    ctx.strokeStyle = "rgba(255,255,255,0.08)";
-    ctx.lineWidth = 1;
+    // Compute base cell size (previous behavior) and allow further subdivision by 10
+    const baseCell = Math.max(1, Math.round(this._gridSize / 100));
+    // one more subdivision: divide base cell by 20 so smallest visible cell becomes ~1 unit for default sizes
+    const subdividedCell = Math.max(0.1, baseCell / 20);
 
-    // draw major lines every N pixels and minor lines
-    // map majorEvery to texture pixels proportionally so lines remain visible at various DT sizes
-    const majorEvery = Math.max(32, Math.floor(texSize / 16));
-    for (let x = 0; x <= texSize; x += 8) {
-      ctx.beginPath();
-      ctx.moveTo(x + 0.5, 0);
-      ctx.lineTo(x + 0.5, texSize);
-      ctx.stroke();
+    // Avoid expensive dynamic texture work when base cells are very small
+    // (many lines would be drawn but they're handled efficiently by GridMaterial shader)
+    let mat;
+    const useDynamicTexture = baseCell >= 8; // only create DT for coarser grids
+    if (useDynamicTexture) {
+      const dpi = window.devicePixelRatio || 1;
+      const texSize = Math.min(1024, Math.max(512, Math.floor(512 * dpi)));
+      const dt = new DynamicTexture(`grid-dt-${this.id}`, { width: texSize, height: texSize }, this.scene, false);
+      const ctx = dt.getContext();
+      ctx.fillStyle = "rgba(0,0,0,0)";
+      ctx.fillRect(0, 0, texSize, texSize);
+      ctx.strokeStyle = "rgba(255,255,255,0.08)";
+      ctx.lineWidth = 1;
+
+      const majorEvery = Math.max(32, Math.floor(texSize / 16));
+      for (let x = 0; x <= texSize; x += 8) {
+        ctx.beginPath();
+        ctx.moveTo(x + 0.5, 0);
+        ctx.lineTo(x + 0.5, texSize);
+        ctx.stroke();
+      }
+      ctx.strokeStyle = "rgba(255,255,255,0.18)";
+      ctx.lineWidth = 1.6;
+      for (let x = 0; x <= texSize; x += majorEvery) {
+        ctx.beginPath();
+        ctx.moveTo(x + 0.5, 0);
+        ctx.lineTo(x + 0.5, texSize);
+        ctx.stroke();
+      }
+      dt.update();
+
+      mat = new GridMaterial(`grid-mat-${this.id}`, this.scene);
+      // When using the dynamic texture, keep grid shader params conservative
+      // majorUnitFrequency should represent number of small cells between major lines (use 10)
+      mat.majorUnitFrequency = 10;
+      mat.minorUnitVisibility = 0.5;
+      // gridRatio represents size of one cell in world units; use subdivided cell
+      mat.gridRatio = subdividedCell;
+    } else {
+      // For fine grids (small cell size) prefer shader-only GridMaterial
+      mat = new GridMaterial(`grid-mat-${this.id}`, this.scene);
+      // major unit should be 10 small cells (so major lines remain spaced similarly to previous behavior)
+      mat.majorUnitFrequency = 10;
+      // reduce minor visibility a bit for performance/readability on dense grids
+      mat.minorUnitVisibility = subdividedCell <= 0.2 ? 0.35 : 0.45;
+      mat.gridRatio = subdividedCell;
     }
-    // emphasize major lines
-    ctx.strokeStyle = "rgba(255,255,255,0.18)";
-    ctx.lineWidth = 1.6;
-    for (let x = 0; x <= texSize; x += majorEvery) {
-      ctx.beginPath();
-      ctx.moveTo(x + 0.5, 0);
-      ctx.lineTo(x + 0.5, texSize);
-      ctx.stroke();
-    }
-    // horizontal lines already drawn above by same loops
 
-    dt.update();
-
-    const mat = new GridMaterial(`grid-mat-${this.id}`, this.scene);
-    mat.majorUnitFrequency = Math.max(10, Math.round(this._gridSize / 100));    // 큰 눈금 간격 (world units)
-    mat.minorUnitVisibility = 0.5; // 작은 눈금 가시성(0..1)
-    mat.gridRatio = Math.max(1, Math.round(this._gridSize / 100));             // 한 셀의 크기
     mat.backFaceCulling = false;
     mat.opacity = 1;
-    // gentler colors: dark background + desaturated lines
-    mat.mainColor = new Color3(0.03, 0.03, 0.04); // very dark base
-    mat.lineColor = new Color3(0.45, 0.45, 0.45); // brighter primary line
-    mat.lineColor2 = new Color3(0.25, 0.28, 0.30); // second line tone
+    mat.mainColor = new Color3(0.03, 0.03, 0.04);
+    mat.lineColor = new Color3(0.45, 0.45, 0.45);
+    mat.lineColor2 = new Color3(0.25, 0.28, 0.30);
 
     const grid = MeshBuilder.CreateGround(`grid-${this.id}`, { width: size, height: size, subdivisions: 1 }, this.scene);
     grid.material = mat;

@@ -38,6 +38,8 @@ export default function App() {
   const [gridVisible, setGridVisible] = useState(true);
   // axes visibility
   const [axesVisible, setAxesVisible] = useState(true);
+  // gizmo visibility state (moved up to avoid TDZ when used in callbacks)
+  const [gizmoVisible, setGizmoVisible] = useState(true);
   // scene header visibility (toggle without re-creating the scene)
   const [sceneHeaderVisible, setSceneHeaderVisible] = useState(true);
 
@@ -50,16 +52,6 @@ export default function App() {
   };
 
   const getCurrentInstance = () => sceneInstanceMap.current.get(currentSceneId);
-
-  const [gizmoVisible, setGizmoVisible] = useState(true);
-  const toggleGizmo = () => {
-    const next = !gizmoVisible;
-    setGizmoVisible(next);
-    const inst = getCurrentInstance();
-    if (inst && typeof inst.setGizmoVisible === 'function') inst.setGizmoVisible(next);
-  };
-
-  const [selectedIds, setSelectedIds] = useState(new Set());
 
   const handleSceneReady = useCallback(
     (sceneId, sp) => {
@@ -82,6 +74,9 @@ export default function App() {
         });
       }
 
+      // prevent camera from responding to keyboard arrows (we use arrows for mesh nudge)
+      try { if (typeof sp.setCameraKeyboardEnabled === 'function') sp.setCameraKeyboardEnabled(false); } catch (e) {}
+
       // apply current grid/axes/gizmo visibility to scene
       sp.setGridVisible(gridVisible);
       sp.setAxesVisible(axesVisible);
@@ -98,7 +93,13 @@ export default function App() {
     const inst = getCurrentInstance();
     if (inst) inst.setAxesVisible(next);
   };
-  
+
+  const toggleGizmo = () => {
+    const next = !gizmoVisible;
+    setGizmoVisible(next);
+    const inst = getCurrentInstance();
+    if (inst && typeof inst.setGizmoVisible === 'function') inst.setGizmoVisible(next);
+  };
 
   const saveSceneToJSON = (id) => {
     const instance = sceneInstanceMap.current.get(id);
@@ -328,6 +329,44 @@ export default function App() {
 
   useEffect(() => {
     const onKey = (e) => {
+      // ignore shortcuts when typing in inputs/selects/textareas
+      try {
+        const tg = e.target;
+        const tag = tg && tg.tagName && tg.tagName.toLowerCase();
+        if (tag === 'input' || tag === 'textarea' || tag === 'select' || (tg && tg.isContentEditable)) return;
+      } catch (err) {}
+
+      // movement shortcuts: Arrow / PageUp/PageDown
+      try {
+        const baseStep = e.shiftKey ? 0.1 : (e.altKey ? 2 : 0.5);
+        if (!e.ctrlKey && !e.metaKey) {
+          let handled = false;
+          if (e.key === 'ArrowLeft') {
+            nudgeSelectedMesh(-baseStep, 0, 0);
+            handled = true;
+          } else if (e.key === 'ArrowRight') {
+            nudgeSelectedMesh(baseStep, 0, 0);
+            handled = true;
+          } else if (e.key === 'ArrowUp') {
+            nudgeSelectedMesh(0, 0, -baseStep);
+            handled = true;
+          } else if (e.key === 'ArrowDown') {
+            nudgeSelectedMesh(0, 0, baseStep);
+            handled = true;
+          } else if (e.key === 'PageUp') {
+            nudgeSelectedMesh(0, baseStep, 0);
+            handled = true;
+          } else if (e.key === 'PageDown') {
+            nudgeSelectedMesh(0, -baseStep, 0);
+            handled = true;
+          }
+          if (handled) {
+            e.preventDefault();
+            return;
+          }
+        }
+      } catch (err) { console.error('nudge error', err); }
+
       if (e.key === "Delete" || e.key === "Backspace") {
         if (selectedMeshId) {
           deleteMeshFromScene(selectedMeshId);
@@ -344,6 +383,22 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, [selectedMeshId]);
 
+  // nudge helper: safely update selected mesh position
+  const nudgeSelectedMesh = (dx, dy, dz) => {
+    try {
+      const id = selectedMeshId;
+      if (!id) return;
+      const inst = getCurrentInstance();
+      if (!inst) return;
+      const meta = inst.getMeta ? inst.getMeta(id) : null;
+      if (!meta) return;
+      const newPos = { x: (meta.position?.x || 0) + (dx || 0), y: (meta.position?.y || 0) + (dy || 0), z: (meta.position?.z || 0) + (dz || 0) };
+      inst.enqueueCommand({ type: 'updateMesh', payload: { id, changes: { position: newPos } } });
+      // trigger UI update
+      forceRerender(n => n + 1);
+    } catch (e) { console.error('nudgeSelectedMesh error', e); }
+  };
+
   const toggleGrid = () => {
     const next = !gridVisible;
     setGridVisible(next);
@@ -355,13 +410,14 @@ export default function App() {
   const currentInstance = sceneInstanceMap.current.get(currentSceneId);
   const meshList = currentInstance ? currentInstance.getMeshMetaList() : currentScene?.json?.meshes || [];
   const selectedMeshMeta = meshList ? meshList.find((m) => m.id === selectedMeshId) : null;
-  
+  const [selectedIds, setSelectedIds] = useState(new Set());
   const [isDragOver, setIsDragOver] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [importJson, setImportJson] = useState(null);
   const [importFileName, setImportFileName] = useState("");
   const [importTarget, setImportTarget] = useState("new"); // 'new' | 'replace'
   const [importDebug, setImportDebug] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
 
   const fileInputRef = useRef(null);
 
@@ -510,6 +566,7 @@ export default function App() {
         onImport={triggerImport}
         onToggleGizmo={toggleGizmo}
         gizmoVisible={gizmoVisible}
+        onShowShortcuts={() => setShowShortcuts(true)}
       />
       <input ref={fileInputRef} type="file" accept="application/json" style={{ display: "none" }} onChange={handleImportFile} />
       <div style={{ flex: 1, display: "flex", alignItems: "stretch" }}>
@@ -541,6 +598,34 @@ export default function App() {
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
                 <button onClick={cancelImport} style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.06)", padding: "8px 12px" }}>Cancel</button>
                 <button onClick={applyImport} style={{ background: "var(--accent)", border: "none", padding: "8px 12px" }}>Import</button>
+              </div>
+            </div>
+          </div>
+        )}
+        {showShortcuts && (
+          <div style={{ position: "fixed", inset: 0, zIndex: 140, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.6)" }}>
+            <div style={{ width: 520, background: "var(--panel)", padding: 18, borderRadius: 10, boxShadow: "0 30px 80px rgba(0,0,0,0.7)", color: "#fff" }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h3 style={{ margin: 0 }}>Keyboard Shortcuts</h3>
+                <button onClick={() => setShowShortcuts(false)} style={{ background: 'transparent', border: 'none', color: '#fff', fontSize: 16 }}>✕</button>
+              </div>
+              <div style={{ marginTop: 12, color: 'var(--muted)' }}>
+                Use keyboard to quickly move and edit selected mesh. Focus must not be inside an input.
+              </div>
+              <table style={{ width: '100%', marginTop: 12, borderCollapse: 'collapse', color: '#e8eef8' }}>
+                <tbody>
+                  <tr><td style={{ padding: 8, width: 220 }}>Arrow Left / Right</td><td style={{ padding: 8 }}>Move selected mesh along X axis (- / +)</td></tr>
+                  <tr><td style={{ padding: 8 }}>Arrow Up / Down</td><td style={{ padding: 8 }}>Move selected mesh along Z axis (forward / back)</td></tr>
+                  <tr><td style={{ padding: 8 }}>PageUp / PageDown</td><td style={{ padding: 8 }}>Move selected mesh along Y axis (up / down)</td></tr>
+                  <tr><td style={{ padding: 8 }}>Shift + Arrow</td><td style={{ padding: 8 }}>Fine movement (small step)</td></tr>
+                  <tr><td style={{ padding: 8 }}>Alt + Arrow</td><td style={{ padding: 8 }}>Large step movement</td></tr>
+                  <tr><td style={{ padding: 8 }}>Delete / Backspace</td><td style={{ padding: 8 }}>Delete selected mesh</td></tr>
+                  <tr><td style={{ padding: 8 }}>Ctrl/Cmd + Z</td><td style={{ padding: 8 }}>Undo</td></tr>
+                  <tr><td style={{ padding: 8 }}>Ctrl/Cmd + Y or Shift+Ctrl/Cmd + Z</td><td style={{ padding: 8 }}>Redo</td></tr>
+                </tbody>
+              </table>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 14 }}>
+                <button onClick={() => setShowShortcuts(false)} style={{ padding: '8px 12px', background: 'var(--accent)', border: 'none', color: '#fff', borderRadius: 8 }}>Close</button>
               </div>
             </div>
           </div>

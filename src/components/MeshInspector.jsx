@@ -56,7 +56,6 @@ export default function MeshInspector({ meshMeta, meshes = [], onChange, onDelet
           ) : null}
           <button onClick={() => onDelete && onDelete(local.id)} style={{ padding: "6px 10px", background: "#ff6b6b", border: "none", color: "#fff", borderRadius: 8 }}>Delete</button>
         </div>
-        <button onClick={() => onDelete && onDelete(local.id)} style={{ padding: "6px 10px", background: "#ff6b6b", border: "none", color: "#fff", borderRadius: 8 }}>Delete</button>
       </div>
 
       <div className="inspector-section">

@@ -1,6 +1,6 @@
 // src/components/TopBar.jsx
 
-export default function TopBar({ onToggleGrid, gridVisible, onToggleHeader, headerVisible, onImport, onToggleGizmo, gizmoVisible }) {
+export default function TopBar({ onToggleGrid, gridVisible, onToggleHeader, headerVisible, onImport, onToggleGizmo, gizmoVisible, onShowShortcuts }) {
   return (
     <header
       style={{
@@ -70,6 +70,14 @@ export default function TopBar({ onToggleGrid, gridVisible, onToggleHeader, head
           style={{ background: gizmoVisible ? "rgba(100,108,255,0.12)" : "transparent" }}
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2v6M12 22v-6M2 12h6M22 12h-6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
+        </button>
+        <button
+          title="Shortcuts"
+          onClick={() => onShowShortcuts && onShowShortcuts()}
+          className="icon-btn icon-btn-circle"
+          style={{ background: "transparent", border: "none", padding: "6px 8px", color: "var(--text)" }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.2"/><text x="12" y="16" fontSize="12" textAnchor="middle" fill="currentColor">?</text></svg>
         </button>
         
       </div>
