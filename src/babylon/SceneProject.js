@@ -2,7 +2,6 @@
 import { ArcRotateCamera } from "@babylonjs/core/Cameras/arcRotateCamera";
 import { Engine } from "@babylonjs/core/Engines/engine";
 import { PointerEventTypes } from "@babylonjs/core/Events/pointerEvents";
-import { HighlightLayer } from "@babylonjs/core/Layers/highlightLayer";
 import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { DynamicTexture } from "@babylonjs/core/Materials/Textures/dynamicTexture";
@@ -32,7 +31,7 @@ export default class SceneProject {
     this.commandQueue = [];
     this._running = false;
 
-    this.highlightLayer = null;
+    this.highlightLayer = null; // legacy field kept for compatibility (no longer used)
     this._selectedId = null;
     this.onSelect = null; // callback: (id|null) => void
 
@@ -83,12 +82,7 @@ export default class SceneProject {
     const hemi = new HemisphericLight("light-" + this.id, new Vector3(0, 1, 0), this.scene);
     hemi.intensity = 0.95;
 
-    // Highlight layer
-    try {
-      this.highlightLayer = new HighlightLayer("hl-" + this.id, this.scene);
-    } catch (e) {
-      this.highlightLayer = null;
-    }
+    // Selection highlighting now uses mesh outline/edges rendering (Blender-like)
 
     this._axesHelper = new AxesHelper(this.scene, this._gridSize); // 길이를 그리드 크기에 맞춤
 
@@ -156,9 +150,7 @@ export default class SceneProject {
       try { this.engine.dispose(); } catch {}
       this.engine = null;
     }
-    try {
-      if (this.highlightLayer) { try { this.highlightLayer.dispose(); } catch {} ; this.highlightLayer = null; }
-    } catch {}
+    // Note: no HighlightLayer disposal needed (not used)
 
     if (this._axesHelper) { try { this._axesHelper.dispose(); } catch {} ; this._axesHelper = null; }
     if (this._gridMesh) { try { this._gridMesh.dispose(); } catch {} ; this._gridMesh = null; }
@@ -429,20 +421,45 @@ export default class SceneProject {
   // Selection & highlight helpers
   _selectMeshById(id) {
     if (this._selectedId === id) return;
-    // clear previous highlight
-    if (this.highlightLayer && this._selectedId) {
+    // clear previous selection outline/edges
+    if (this._selectedId) {
       const prevMesh = this.meshMap.get(this._selectedId);
       if (prevMesh) {
-        try { this.highlightLayer.removeMesh(prevMesh); } catch {}
+        try {
+          if (typeof prevMesh.renderOutline !== "undefined") {
+            prevMesh.renderOutline = false;
+          }
+          if (typeof prevMesh.disableEdgesRendering === "function") {
+            try { prevMesh.disableEdgesRendering(); } catch {}
+          }
+        } catch {}
       }
     }
+
     this._selectedId = id || null;
-    if (id && this.highlightLayer) {
+
+    // apply new selection style: prefer renderOutline (silhouette outline), fallback to edges rendering
+    if (id) {
       const m = this.meshMap.get(id);
       if (m) {
-        try { this.highlightLayer.addMesh(m, Color3.FromInts(255, 200, 64)); } catch {}
+        try {
+          if (typeof m.renderOutline !== "undefined") {
+            m.renderOutline = true;
+            m.outlineColor = new Color3(1.0, 0.62, 0.25); // warm/orange tint similar to Blender
+            m.outlineWidth = 0.02;
+          } else if (typeof m.enableEdgesRendering === "function") {
+            try {
+              m.enableEdgesRendering();
+              if (typeof m.edgesColor !== "undefined") {
+                m.edgesColor = new Color4(1.0, 0.62, 0.25, 1.0);
+                m.edgesWidth = 4.0;
+              }
+            } catch {}
+          }
+        } catch {}
       }
     }
+
     // attach/detach gizmo to selected mesh
     try {
       if (this._gizmoManager) {
