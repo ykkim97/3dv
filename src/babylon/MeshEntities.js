@@ -1,69 +1,16 @@
 // src/babylon/MeshEntities.js
-export class MeshMeta {
-  constructor({ id, name = null, kind, params = {}, parent = null, position = { x: 0, y: 0, z: 0 }, rotation = { x: 0, y: 0, z: 0 }, scaling = { x: 1, y: 1, z: 1 }, material = null }) {
-    this.id = id;
-    this.name = name || id;
-    this.kind = kind; // 'box' | 'sphere' | 'cylinder' | 'cone' | 'line' | ...
-    this.params = params;
-    this.parent = parent; // parent mesh id or null
-    this.position = { ...position };
-    this.rotation = { ...rotation };
-    this.scaling = { ...scaling };
-    // material: { color: {r,g,b} (0..1), specularPower: number }
-    this.material = material || { color: { r: 0.9, g: 0.9, b: 0.9 }, specularPower: 64 };
-  }
-}
+// Barrel module: keeps existing imports stable while splitting each shape meta into its own file.
 
-// add this MergedMeta class near the other Meta classes
-export class MergedMeta extends MeshMeta {
-  constructor(opts = {}) {
-    // params should contain: { mergedIds: [...], originalParents: { id: parentId|null } }
-    const params = { mergedIds: (opts.params && opts.params.mergedIds) || [], originalParents: (opts.params && opts.params.originalParents) || {}, ...((opts.params) || {}) };
-    super({ kind: "merged", params, ...opts });
-  }
-}
-export class BoxMeta extends MeshMeta {
-  constructor(opts = {}) {
-    super({ kind: "box", params: { size: 1, ...opts.params }, ...opts });
-  }
-}
+export { MeshMeta } from "./meshes/meta/MeshMeta";
 
-export class SphereMeta extends MeshMeta {
-  constructor(opts = {}) {
-    super({ kind: "sphere", params: { diameter: 1, ...opts.params }, ...opts });
-  }
-}
+export { BoxMeta } from "./meshes/meta/BoxMeta";
+export { SphereMeta } from "./meshes/meta/SphereMeta";
+export { CylinderMeta } from "./meshes/meta/CylinderMeta";
+export { ConeMeta } from "./meshes/meta/ConeMeta";
+export { TetraMeta } from "./meshes/meta/TetraMeta";
+export { TorusMeta } from "./meshes/meta/TorusMeta";
+export { TextBoxMeta } from "./meshes/meta/TextBoxMeta";
+export { LineMeta } from "./meshes/meta/LineMeta";
+export { MergedMeta } from "./meshes/meta/MergedMeta";
 
-export class CylinderMeta extends MeshMeta {
-  constructor(opts = {}) {
-    super({ kind: "cylinder", params: { height: 1, diameterTop: 1, diameterBottom: 1, tessellation: 16, ...opts.params }, ...opts });
-  }
-}
-
-// cone: a cylinder with diameterTop = 0 by default
-export class ConeMeta extends MeshMeta {
-  constructor(opts = {}) {
-    super({ kind: "cone", params: { height: 1, diameterBottom: 1, diameterTop: 0, tessellation: 16, ...opts.params }, ...opts });
-  }
-}
-
-// line: store an array of points (each {x,y,z}) in params.points
-export class LineMeta extends MeshMeta {
-  constructor(opts = {}) {
-    const defaultPoints = [{ x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }];
-    super({ kind: "line", params: { points: defaultPoints, ...opts.params }, ...opts });
-  }
-}
-
-// Small factory
-export function createMeta(kind, opts = {}) {
-  const id = opts.id || `${kind}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-  const base = { id, name: opts.name, params: opts.params, parent: opts.parent, position: opts.position, rotation: opts.rotation, scaling: opts.scaling, material: opts.material };
-  if (kind === "box") return new BoxMeta(base);
-  if (kind === "sphere") return new SphereMeta(base);
-  if (kind === "cylinder") return new CylinderMeta(base);
-  if (kind === "cone") return new ConeMeta(base);
-  if (kind === "line") return new LineMeta(base);
-  if (kind === "merged") return new MergedMeta(base);
-  return new MeshMeta({ kind, ...base });
-}
+export { createMeta } from "./meshes/meta/createMeta";

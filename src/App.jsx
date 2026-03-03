@@ -1,11 +1,21 @@
 // src/App.jsx
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 import { createMeta } from "./babylon/MeshEntities";
 import MeshInspector from "./components/MeshInspector.jsx";
 import MeshList from "./components/MeshList.jsx";
+import MeshPrimitivesToolbar from "./components/MeshPrimitivesToolbar.jsx";
 import SceneView from "./components/SceneView.jsx";
 import TopBar from "./components/TopBar.jsx";
+import { getDemoWasm } from "./wasm/demoWasm";
+import ScriptEngine from "./runtime/ScriptEngine";
+import ScriptEditorModal from "./components/ScriptEditorModal.jsx";
+import { getSceneNameError, normalizeSceneName } from "./utils/sceneName";
+import HelpModal from "./components/HelpModal.jsx";
+import MeshContextMenu from "./components/MeshContextMenu.jsx";
+import MeshPropertiesModal from "./components/MeshPropertiesModal.jsx";
+import RenameModal from "./components/RenameModal.jsx";
+import { LANGS, makeT } from "./i18n";
 
 function downloadJSON(obj, filename = "scene.json") {
   const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(obj, null, 2));
@@ -18,9 +28,44 @@ function downloadJSON(obj, filename = "scene.json") {
 }
 
 export default function App() {
+  const [lang, setLang] = useState(() => {
+    try {
+      const saved = localStorage.getItem("lumatrix-lang");
+      if (saved === LANGS.ko || saved === LANGS.en) return saved;
+    } catch (err) { void err; }
+    return LANGS.ko;
+  });
+
+  useEffect(() => {
+    try { localStorage.setItem("lumatrix-lang", lang); } catch (err) { void err; }
+  }, [lang]);
+
+  const t = useMemo(() => makeT(lang), [lang]);
+
+  const [theme, setTheme] = useState(() => {
+    try {
+      const saved = localStorage.getItem("lumatrix-theme");
+      if (saved === "light" || saved === "dark") return saved;
+      if (typeof window !== "undefined" && window.matchMedia) {
+        return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+      }
+    } catch (err) { void err; }
+    return "dark";
+  });
+
+  useEffect(() => {
+    try {
+      document.documentElement.dataset.theme = theme;
+      localStorage.setItem("lumatrix-theme", theme);
+    } catch (err) { void err; }
+  }, [theme]);
+
   const [scenes, setScenes] = useState([]);
   const [currentSceneId, setCurrentSceneId] = useState(null);
   const [newName, setNewName] = useState("");
+
+  const sceneNameError = useMemo(() => getSceneNameError(newName), [newName]);
+  const canCreateScene = !sceneNameError;
 
   const [sceneInstances, setSceneInstances] = useState(() => new Map());
   const [selectedMeshId, setSelectedMeshId] = useState(null);
@@ -41,18 +86,49 @@ export default function App() {
   const [axesVisible, setAxesVisible] = useState(true);
   // gizmo visibility state (moved up to avoid TDZ when used in callbacks)
   const [gizmoVisible, setGizmoVisible] = useState(true);
+  const gizmoVisibleBeforeRuntimeRef = useRef(null);
   // scene header visibility (toggle without re-creating the scene)
   const [sceneHeaderVisible, setSceneHeaderVisible] = useState(true);
 
+  // Mode: edit vs runtime
+  const [runtimeMode, setRuntimeMode] = useState(false);
+
+  // Mesh placement mode: click a primitive, then click in the viewport to place it.
+  const [armedCreateKind, setArmedCreateKind] = useState(null);
+
+  // Script editor modal state
+  const [scriptEditorOpen, setScriptEditorOpen] = useState(false);
+  const [scriptEditorMeshId, setScriptEditorMeshId] = useState(null);
+
+  const [showHelp, setShowHelp] = useState(false);
+
+  const [meshCtx, setMeshCtx] = useState(null); // { meshId, x, y }
+  const [meshPropsOpen, setMeshPropsOpen] = useState(false);
+  const [meshPropsId, setMeshPropsId] = useState(null);
+  const [meshRenameOpen, setMeshRenameOpen] = useState(false);
+  const [meshRenameId, setMeshRenameId] = useState(null);
+
   const createScene = () => {
+    const err = getSceneNameError(newName);
+    if (err) return;
     const id = `scene-${Date.now()}`;
-    const sceneMeta = { id, name: newName || "Untitled Scene", json: null };
+    const sceneMeta = { id, name: normalizeSceneName(newName), json: null };
     setScenes((s) => [...s, sceneMeta]);
     setNewName("");
     setCurrentSceneId(id);
   };
 
   const getCurrentInstance = () => sceneInstances.get(currentSceneId);
+
+  const openScriptEditor = (meshId) => {
+    if (!meshId) return;
+    setScriptEditorMeshId(meshId);
+    setScriptEditorOpen(true);
+  };
+
+  const closeScriptEditor = () => {
+    setScriptEditorOpen(false);
+  };
 
   const handleSceneReady = useCallback(
     (sceneId, sp) => {
@@ -85,11 +161,29 @@ export default function App() {
       // apply current grid/axes/gizmo visibility to scene
       sp.setGridVisible(gridVisible);
       sp.setAxesVisible(axesVisible);
-      if (typeof sp.setGizmoVisible === 'function') sp.setGizmoVisible(gizmoVisible);
+      if (typeof sp.setGizmoVisible === 'function') sp.setGizmoVisible(runtimeMode ? false : gizmoVisible);
+
+      // inject WASM exports into SceneProject (optional; safe if WASM fails)
+      try {
+        getDemoWasm()
+          .then((wasm) => {
+            try { if (sp && typeof sp.setWasm === "function") sp.setWasm(wasm); } catch (err) { void err; }
+          })
+          .catch((err) => { void err; });
+      } catch (err) { void err; }
+
+      // inject script engine (Worker sandbox)
+      try {
+        const eng = scriptEngineRef.current;
+        if (sp && typeof sp.setScriptEngine === "function") sp.setScriptEngine(eng);
+      } catch (err) { void err; }
+
+      // apply current mode
+      try { if (sp && typeof sp.setRuntimeEnabled === "function") sp.setRuntimeEnabled(runtimeMode); } catch (err) { void err; }
 
       forceRerender((n) => n + 1);
     },
-    [gridVisible, axesVisible, gizmoVisible]
+    [gridVisible, axesVisible, gizmoVisible, runtimeMode]
   );
 
   const toggleAxes = () => {
@@ -100,11 +194,29 @@ export default function App() {
   };
 
   const toggleGizmo = () => {
+    if (runtimeMode) return;
     const next = !gizmoVisible;
     setGizmoVisible(next);
     const inst = getCurrentInstance();
     if (inst && typeof inst.setGizmoVisible === 'function') inst.setGizmoVisible(next);
   };
+
+  // In runtime mode, gizmo should be forcibly disabled.
+  useEffect(() => {
+    const inst = sceneInstances.get(currentSceneId);
+    if (runtimeMode) {
+      if (gizmoVisibleBeforeRuntimeRef.current === null) gizmoVisibleBeforeRuntimeRef.current = gizmoVisible;
+      if (gizmoVisible) setGizmoVisible(false);
+      try { if (inst && typeof inst.setGizmoVisible === 'function') inst.setGizmoVisible(false); } catch (err) { void err; }
+    } else {
+      const restore = gizmoVisibleBeforeRuntimeRef.current;
+      if (restore !== null && restore !== gizmoVisible) {
+        setGizmoVisible(restore);
+        try { if (inst && typeof inst.setGizmoVisible === 'function') inst.setGizmoVisible(restore); } catch (err) { void err; }
+      }
+      gizmoVisibleBeforeRuntimeRef.current = null;
+    }
+  }, [runtimeMode, currentSceneId, sceneInstances, gizmoVisible]);
 
   const saveSceneToJSON = (id) => {
     const instance = sceneInstances.get(id);
@@ -146,7 +258,7 @@ export default function App() {
   };
 
   // Create mesh with deterministic id/name; initially always top-level (no parent)
-  const addMeshToCurrent = (kind) => {
+  const addMeshToCurrent = (kind, positionOverride = null) => {
     const inst = getCurrentInstance();
     if (!inst) {
       alert("Scene not initialized in view. Click the scene to open it.");
@@ -155,7 +267,10 @@ export default function App() {
     const id = `${kind}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     const name = `${kind}-${Math.floor(Math.random() * 1000)}`;
     const parent = null;
-    const meta = createMeta(kind, { id, name, parent });
+    const position = positionOverride
+      ? { x: Number(positionOverride.x) || 0, y: Number(positionOverride.y) || 0, z: Number(positionOverride.z) || 0 }
+      : undefined;
+    const meta = createMeta(kind, { id, name, parent, position });
     inst.enqueueCommand({ type: "createMesh", payload: { ...meta } });
 
     undoStack.current.push({
@@ -216,6 +331,55 @@ export default function App() {
     setTimeout(() => forceRerender(n => n + 1), 60);
   };
 
+  const groupSelected = () => {
+    const inst = getCurrentInstance();
+    if (!inst) return;
+    const raw = Array.from(selectedIds || []);
+    if (raw.length < 2) return;
+
+    // avoid grouping an existing group node as a child
+    const childIds = raw.filter((id) => {
+      const m = inst.getMeta ? inst.getMeta(id) : null;
+      return m && m.kind !== "group";
+    });
+    if (childIds.length < 2) return;
+
+    const id = `group-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const name = `Group-${Math.floor(Math.random() * 1000)}`;
+
+    inst.enqueueCommand({ type: "groupMeshes", payload: { id, name, childIds } });
+
+    // basic undo/redo (best-effort)
+    undoStack.current.push({
+      undo: () => {
+        const i = getCurrentInstance();
+        if (i) i.enqueueCommand({ type: "ungroup", payload: { id } });
+      },
+      redo: () => {
+        const i = getCurrentInstance();
+        if (i) i.enqueueCommand({ type: "groupMeshes", payload: { id, name, childIds } });
+      },
+    });
+    redoStack.current.length = 0;
+
+    setSelectedIds(new Set([id]));
+    setSelectedMeshId(id);
+    setTimeout(() => {
+      const i = getCurrentInstance();
+      if (i) i.highlightMesh(id);
+      forceRerender((n) => n + 1);
+    }, 60);
+  };
+
+  const ungroupById = (id) => {
+    const inst = getCurrentInstance();
+    if (!inst || !id) return;
+    inst.enqueueCommand({ type: "ungroup", payload: { id } });
+    setSelectedMeshId(null);
+    setSelectedIds(new Set());
+    setTimeout(() => forceRerender((n) => n + 1), 40);
+  };
+
   const onUnmerge = (id) => {
     const inst = getCurrentInstance();
     if (!inst) return;
@@ -268,6 +432,48 @@ export default function App() {
       forceRerender((n) => n + 1);
     };
 
+  const openMeshContextMenu = (meshId, ev) => {
+    try {
+      if (!meshId) return;
+      if (ev && typeof ev.preventDefault === "function") ev.preventDefault();
+      try {
+        // Right-click should not destroy an existing multi-selection.
+        if (!(selectedIds && selectedIds.size > 1 && selectedIds.has(meshId))) {
+          onMeshSelect(meshId, ev);
+        }
+      } catch (err) { void err; }
+      const x = ev?.clientX ?? 0;
+      const y = ev?.clientY ?? 0;
+      setMeshCtx({ meshId, x, y });
+    } catch (err) {
+      void err;
+    }
+  };
+
+  const closeMeshContextMenu = () => setMeshCtx(null);
+
+  const moveMeshesToGroup = (ids, groupId) => {
+    const inst = getCurrentInstance();
+    if (!inst) return;
+    const list = Array.isArray(ids) ? ids : [];
+    if (!groupId || !list.length) return;
+    for (const id of list) {
+      if (!id || id === groupId) continue;
+      inst.enqueueCommand({ type: "updateMesh", payload: { id, changes: { parent: groupId } } });
+    }
+    setTimeout(() => forceRerender((n) => n + 1), 30);
+  };
+
+  const openMeshProperties = (meshId) => {
+    setMeshPropsId(meshId);
+    setMeshPropsOpen(true);
+  };
+
+  const openMeshRename = (meshId) => {
+    setMeshRenameId(meshId);
+    setMeshRenameOpen(true);
+  };
+
   const onInspectorChange = (updatedMeta) => {
     const inst = getCurrentInstance();
     if (!inst) return;
@@ -280,6 +486,7 @@ export default function App() {
       name: updatedMeta.name,
       material: updatedMeta.material,
       parent: updatedMeta.parent,
+      params: updatedMeta.params,
     };
     inst.enqueueCommand({ type: "updateMesh", payload: { id: updatedMeta.id, changes } });
 
@@ -299,6 +506,7 @@ export default function App() {
                   name: prevMeta.name,
                   material: prevMeta.material,
                   parent: prevMeta.parent,
+                  params: prevMeta.params,
                 },
               },
             });
@@ -354,6 +562,7 @@ export default function App() {
   };
 
   useEffect(() => {
+    if (runtimeMode) return;
     const onKey = (e) => {
       // ignore shortcuts when typing in inputs/selects/textareas
       try {
@@ -407,7 +616,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selectedMeshId, deleteMeshFromScene, nudgeSelectedMesh, undo, redo]);
+  }, [runtimeMode, selectedMeshId, deleteMeshFromScene, nudgeSelectedMesh, undo, redo]);
 
   const toggleGrid = () => {
     const next = !gridVisible;
@@ -416,10 +625,25 @@ export default function App() {
     if (inst) inst.setGridVisible(next);
   };
 
+  const canToggleRuntime = !!currentSceneId;
+
+  const toggleRuntimeMode = () => {
+    if (!canToggleRuntime) return;
+    setRuntimeMode((prev) => {
+      const next = !prev;
+      const inst = getCurrentInstance();
+      try { if (inst && typeof inst.setRuntimeEnabled === "function") inst.setRuntimeEnabled(next); } catch (err) { void err; }
+      return next;
+    });
+  };
+
   const currentScene = scenes.find((s) => s.id === currentSceneId);
   const currentInstance = sceneInstances.get(currentSceneId);
   const meshList = currentInstance ? currentInstance.getMeshMetaList() : currentScene?.json?.meshes || [];
   const selectedMeshMeta = meshList ? meshList.find((m) => m.id === selectedMeshId) : null;
+  const scriptEditorMeshMeta = meshList ? meshList.find((m) => m.id === scriptEditorMeshId) : null;
+  const meshPropsMeta = meshList ? meshList.find((m) => m.id === meshPropsId) : null;
+  const meshRenameMeta = meshList ? meshList.find((m) => m.id === meshRenameId) : null;
   const [isDragOver, setIsDragOver] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [importJson, setImportJson] = useState(null);
@@ -428,7 +652,84 @@ export default function App() {
   const [importDebug, setImportDebug] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
 
+  // If scene is cleared/unselected, force runtime off and cancel placement.
+  useEffect(() => {
+    if (!currentSceneId) {
+      if (runtimeMode) setRuntimeMode(false);
+      if (armedCreateKind) setArmedCreateKind(null);
+    }
+  }, [currentSceneId, runtimeMode, armedCreateKind]);
+
+  // Cancel placement when switching scenes.
+  useEffect(() => {
+    setArmedCreateKind(null);
+  }, [currentSceneId]);
+
   const fileInputRef = useRef(null);
+
+  // Script engine (Worker) shared across scenes.
+  const scriptEngineRef = useRef(null);
+  useEffect(() => {
+    scriptEngineRef.current = new ScriptEngine({ timeoutMs: 800 });
+    return () => {
+      try { scriptEngineRef.current?.dispose(); } catch (err) { void err; }
+      scriptEngineRef.current = null;
+    };
+  }, []);
+
+  // WASM demo: load once on app start.
+  useEffect(() => {
+    let cancelled = false;
+    getDemoWasm()
+      .then((wasm) => {
+        if (cancelled) return;
+        try {
+          // eslint-disable-next-line no-console
+          console.log("[wasm] demo add(40,2) =", wasm.add(40, 2));
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.warn("[wasm] demo call failed", err);
+        }
+      })
+      .catch((err) => {
+        // eslint-disable-next-line no-console
+        console.warn("[wasm] failed to load", err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Real-time data polling (runtime mode only): fetch JSON once per second and push into script engine.
+  // Backend should be an API gateway to your DB (browser should not connect to DB directly).
+  useEffect(() => {
+    if (!runtimeMode) return;
+    const inst = currentInstance;
+    const engine = scriptEngineRef.current;
+    if (!inst || !engine) return;
+
+    const endpoint = import.meta.env.VITE_DATA_ENDPOINT || "/api/data";
+    let cancelled = false;
+
+    const tick = async () => {
+      try {
+        const res = await fetch(endpoint, { headers: { "accept": "application/json" } });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (cancelled) return;
+        engine.setData(data);
+      } catch (err) {
+        void err;
+      }
+    };
+
+    tick();
+    const t = setInterval(tick, 1000);
+    return () => {
+      cancelled = true;
+      clearInterval(t);
+    };
+  }, [runtimeMode, currentSceneId, currentInstance]);
 
   const triggerImport = () => {
     if (fileInputRef.current) {
@@ -503,7 +804,7 @@ export default function App() {
             }
           } catch { void 0; }
           for (const m of importedMeshes) {
-            const payload = { kind: m.kind, params: m.params, position: m.position, rotation: m.rotation, scaling: m.scaling, id: m.id, name: m.name || m.id, material: m.material, parent: m.parent };
+            const payload = { kind: m.kind, params: m.params, position: m.position, rotation: m.rotation, scaling: m.scaling, id: m.id, name: m.name || m.id, material: m.material, parent: m.parent, scripts: m.scripts };
             inst.enqueueCommand({ type: "createMesh", payload });
           }
 
@@ -567,6 +868,21 @@ export default function App() {
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
     >
+      <ScriptEditorModal
+        open={scriptEditorOpen}
+        meshMeta={scriptEditorMeshMeta}
+        onClose={closeScriptEditor}
+        onSave={(scripts) => {
+          const inst = getCurrentInstance();
+          if (!inst || !scriptEditorMeshId) {
+            closeScriptEditor();
+            return;
+          }
+          inst.enqueueCommand({ type: "updateMesh", payload: { id: scriptEditorMeshId, changes: { scripts } } });
+          closeScriptEditor();
+          setTimeout(() => forceRerender((n) => n + 1), 30);
+        }}
+      />
       <TopBar
         onToggleGrid={toggleGrid}
         gridVisible={gridVisible}
@@ -576,7 +892,81 @@ export default function App() {
         onToggleGizmo={toggleGizmo}
         gizmoVisible={gizmoVisible}
         onShowShortcuts={() => setShowShortcuts(true)}
+        onShowHelp={() => setShowHelp(true)}
+        runtimeMode={runtimeMode}
+        onToggleRuntimeMode={toggleRuntimeMode}
+        runtimeDisabled={!canToggleRuntime}
+        theme={theme}
+        onToggleTheme={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
+        lang={lang}
+        onToggleLang={() => setLang((p) => (p === LANGS.ko ? LANGS.en : LANGS.ko))}
+        t={t}
       />
+
+      <HelpModal open={showHelp} onClose={() => setShowHelp(false)} t={t} />
+
+      <MeshContextMenu
+        open={!!meshCtx}
+        x={meshCtx?.x || 0}
+        y={meshCtx?.y || 0}
+        onClose={closeMeshContextMenu}
+        t={t}
+        onFrame={() => {
+          const id = meshCtx?.meshId;
+          const inst = getCurrentInstance();
+          try { if (inst && typeof inst.frameMesh === "function") inst.frameMesh(id); } catch (err) { void err; }
+        }}
+        onOpenProperties={() => {
+          const id = meshCtx?.meshId;
+          if (id) openMeshProperties(id);
+        }}
+        onRename={() => {
+          const id = meshCtx?.meshId;
+          if (id) openMeshRename(id);
+        }}
+        onDelete={() => {
+          const id = meshCtx?.meshId;
+          if (id) deleteMeshFromScene(id);
+        }}
+        canGroup={(selectedIds && selectedIds.size >= 2)}
+        canUngroup={(() => {
+          const id = meshCtx?.meshId;
+          const inst = getCurrentInstance();
+          const m = (id && inst && typeof inst.getMeta === "function") ? inst.getMeta(id) : null;
+          return !!(m && m.kind === "group");
+        })()}
+        onGroup={() => groupSelected()}
+        onUngroup={() => {
+          const id = meshCtx?.meshId;
+          if (id) ungroupById(id);
+        }}
+      />
+
+      <MeshPropertiesModal
+        open={meshPropsOpen}
+        meshMeta={meshPropsMeta}
+        onClose={() => { setMeshPropsOpen(false); setMeshPropsId(null); }}
+      />
+
+      <RenameModal
+        open={meshRenameOpen}
+        title="Rename Mesh"
+        initialValue={meshRenameMeta?.name || ""}
+        onClose={() => { setMeshRenameOpen(false); setMeshRenameId(null); }}
+        onSubmit={(nextName) => {
+          const id = meshRenameId;
+          const inst = getCurrentInstance();
+          if (!id || !inst) return;
+          try {
+            inst.enqueueCommand({ type: "updateMesh", payload: { id, changes: { name: nextName } } });
+          } catch (err) {
+            void err;
+          }
+          setMeshRenameOpen(false);
+          setMeshRenameId(null);
+        }}
+      />
+
       <input ref={fileInputRef} type="file" accept="application/json" style={{ display: "none" }} onChange={handleImportFile} />
       <div className="app-body">
         {isDragOver && (
@@ -644,6 +1034,7 @@ export default function App() {
           </div>
         )}
         {/* LEFT: Icon bar + panel (refactored) */}
+        {!runtimeMode && (
         <aside className="sidebar" role="complementary" aria-label="Left sidebar">
           <div className="sidebar-icons" aria-hidden>
             <button title="Scenes" type="button" onClick={() => setLeftTab("scenes")} className={`icon-btn ${leftTab === "scenes" ? "active" : ""}`}>
@@ -664,7 +1055,7 @@ export default function App() {
             {leftTab === "scenes" ? (
               <>
                 <div className="panel-header">
-                  <h2>Scenes</h2>
+                  <h2>{t("panel.scenes")}</h2>
                   <div className="panel-controls">
                     <button onClick={() => setScenesCollapsed((v) => !v)} title={scenesCollapsed ? "Expand" : "Collapse"}>
                       {scenesCollapsed ? "▸" : "▾"}
@@ -674,9 +1065,29 @@ export default function App() {
 
                 {!scenesCollapsed && (
                   <>
-                    <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                      <input placeholder="scene name" value={newName} onChange={(e) => setNewName(e.target.value)} className="input" style={{ flex: 1 }} />
-                      <button className="btn btn-primary" type="button" onClick={createScene}>Create</button>
+                    <div style={{ display: "flex", gap: 8, marginTop: 12, alignItems: "flex-start" }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <input
+                          placeholder="scene name (A-Z, 0-9, space, _, -)"
+                          value={newName}
+                          onChange={(e) => setNewName(e.target.value)}
+                          className="input"
+                          style={{ width: "100%" }}
+                          aria-invalid={!!sceneNameError}
+                        />
+                        {sceneNameError ? (
+                          <div style={{ marginTop: 6, fontSize: 11, color: "var(--warn)", fontWeight: 700 }}>
+                            {sceneNameError}
+                          </div>
+                        ) : (
+                          <div style={{ marginTop: 6, fontSize: 11, color: "var(--muted)" }}>
+                            씬 이름은 필수이며, 한글은 사용할 수 없습니다.
+                          </div>
+                        )}
+                      </div>
+                      <button className="btn btn-primary" type="button" onClick={createScene} disabled={!canCreateScene}>
+                        {t("btn.create")}
+                      </button>
                     </div>
 
                     <div style={{ marginTop: 12 }}>
@@ -687,8 +1098,8 @@ export default function App() {
                             <div className="sub">{s.id}</div>
                           </div>
                           <div style={{ display: "flex", gap: 8 }}>
-                            <button type="button" onClick={(ev) => { ev.stopPropagation(); saveSceneToJSON(s.id); }}>Save</button>
-                            <button type="button" className="btn btn-warn" onClick={(ev) => { ev.stopPropagation(); deleteScene(s.id); }}>Delete</button>
+                            <button type="button" onClick={(ev) => { ev.stopPropagation(); saveSceneToJSON(s.id); }}>{t("btn.save")}</button>
+                            <button type="button" className="btn btn-warn" onClick={(ev) => { ev.stopPropagation(); deleteScene(s.id); }}>{t("btn.delete")}</button>
                           </div>
                         </div>
                       ))}
@@ -699,7 +1110,7 @@ export default function App() {
             ) : (
               <>
                 <div className="panel-header">
-                  <h2>Meshes</h2>
+                  <h2>{t("panel.meshes")}</h2>
                   <div className="panel-controls">
                     <button onClick={() => setMeshesCollapsed((v) => !v)}>{meshesCollapsed ? "▸" : "▾"}</button>
                   </div>
@@ -707,37 +1118,39 @@ export default function App() {
 
                 {!meshesCollapsed && (
                   <>
-                    <div className="add-collection" role="toolbar" aria-label="Add meshes">
-                      <button title="Add Box" type="button" onClick={() => addMeshToCurrent("box")} className="icon-btn">
-                        <svg className="svg" viewBox="0 0 24 24" width="18" height="18" xmlns="http://www.w3.org/2000/svg" aria-hidden><path d="M3 7.5L12 3l9 4.5v7L12 21 3 14.5v-7z" /></svg>
-                      </button>
+                    <div className="mesh-panel-body">
+                      <div className="mesh-section">
+                        <div className="mesh-section-label">
+                          <span className="mesh-section-title">{t("panel.addPrimitives")}</span>
+                          <span className="mesh-section-line" />
+                        </div>
 
-                      <button title="Add Sphere" type="button" onClick={() => addMeshToCurrent("sphere")} className="icon-btn">
-                        <svg className="svg" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="8" /></svg>
-                      </button>
+                        <MeshPrimitivesToolbar
+                          onAdd={(kind) => {
+                            setArmedCreateKind((prev) => (prev === kind ? null : kind));
+                          }}
+                        />
+                      </div>
 
-                      <button title="Add Cylinder" type="button" onClick={() => addMeshToCurrent("cylinder")} className="icon-btn">
-                        <svg className="svg" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><ellipse cx="12" cy="5" rx="7" ry="2" /><path d="M5 5v11c0 1.1 3.1 2 7 2s7-.9 7-2V5" /></svg>
-                      </button>
+                      <div className="mesh-section mesh-section-fill">
+                        <div className="mesh-section-label">
+                          <span className="mesh-section-title">{t("panel.meshTree")}</span>
+                          <span className="mesh-section-line" />
+                        </div>
 
-                      <button title="Add Cone" type="button" onClick={() => addMeshToCurrent("cone")} className="icon-btn">
-                        <svg className="svg" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 2 L20 20 H4 Z" /></svg>
-                      </button>
-
-                      <button title="Add Line" type="button" onClick={() => addMeshToCurrent("line")} className="icon-btn">
-                        <svg className="svg" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M4 12 L10 8 L14 16 L20 12" stroke="currentColor" fill="none" strokeWidth="2"/></svg>
-                      </button>
-                    </div>
-
-                    <div className="mesh-list-card">
-                      <MeshList
-                        meshes={meshList || []}
-                        onSelect={onMeshSelect}
-                        onDelete={deleteMeshFromScene}
-                        selectedId={selectedMeshId}
-                        selectedIds={selectedIds}
-                        onSelectionChange={(nextSet) => setSelectedIds(new Set(nextSet))}
-                      />
+                        <div className="mesh-list-card mesh-list-fill">
+                          <MeshList
+                            meshes={meshList || []}
+                            onSelect={onMeshSelect}
+                            onDelete={deleteMeshFromScene}
+                            onContextMenu={openMeshContextMenu}
+                            selectedId={selectedMeshId}
+                            selectedIds={selectedIds}
+                            onMoveToGroup={moveMeshesToGroup}
+                            t={t}
+                          />
+                        </div>
+                      </div>
                     </div>
                   </>
                 )}
@@ -745,9 +1158,10 @@ export default function App() {
             )}
           </div>
         </aside>
+        )}
 
         {/* CENTER */}
-        <main className="center">
+        <main className={`center ${runtimeMode ? "runtime-stage" : ""}`}>
           {currentSceneId ? (
             <SceneView
               key={currentSceneId}
@@ -761,20 +1175,40 @@ export default function App() {
               axesVisible={axesVisible}
               onUndo={undo}
               onRedo={redo}
-              headerVisible={sceneHeaderVisible}
+              headerVisible={sceneHeaderVisible && !runtimeMode}
+              runtimeMode={runtimeMode}
+              placementKind={armedCreateKind}
+              t={t}
+              onCommitPlacement={(point) => {
+                if (!armedCreateKind) return;
+                addMeshToCurrent(armedCreateKind, point);
+                setArmedCreateKind(null);
+              }}
             />
           ) : (
-            <div style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--muted)" }}>Select or create a scene</div>
+            <div style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--muted)" }}>{t("empty.selectScene")}</div>
           )}
         </main>
 
         {/* RIGHT (inspector) — reduced width to 300 */}
-        <aside className="inspector-panel">
-          <div className="inspector-title">Inspector</div>
-          <div className="inspector-content">
-            <MeshInspector key={selectedMeshId || "none"} meshMeta={selectedMeshMeta} meshes={meshList || []} onChange={onInspectorChange} onDelete={(id) => { deleteMeshFromScene(id); }} onUnmerge={onUnmerge} />
-          </div>
-        </aside>
+        {!runtimeMode && (
+          <aside className="inspector-panel">
+            <div className="inspector-title">{t("inspector.title")}</div>
+            <div className="inspector-content">
+              <MeshInspector
+                key={selectedMeshId || "none"}
+                meshMeta={selectedMeshMeta}
+                meshes={meshList || []}
+                onChange={onInspectorChange}
+                onDelete={(id) => { deleteMeshFromScene(id); }}
+                onUnmerge={onUnmerge}
+                runtimeMode={runtimeMode}
+                onOpenScript={(id) => openScriptEditor(id)}
+                t={t}
+              />
+            </div>
+          </aside>
+        )}
       </div>
     </div>
   );

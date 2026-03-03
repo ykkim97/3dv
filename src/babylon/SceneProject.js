@@ -5,9 +5,10 @@ import { PointerEventTypes } from "@babylonjs/core/Events/pointerEvents";
 import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
 import { DirectionalLight } from "@babylonjs/core/Lights/directionalLight";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
+import { PBRMaterial } from "@babylonjs/core/Materials/PBR/pbrMaterial";
 import { DynamicTexture } from "@babylonjs/core/Materials/Textures/dynamicTexture";
 import { Color3, Color4 } from "@babylonjs/core/Maths/math.color";
-import { Vector3 } from "@babylonjs/core/Maths/math.vector";
+import { Matrix, Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
 import { Scene } from "@babylonjs/core/scene";
 import "@babylonjs/loaders";
@@ -46,9 +47,29 @@ export default class SceneProject {
     this._gridVisible = false;
     this._gridSize = 2000; // world units for grid and axes default
     this._gizmoManager = null;
+    this._gizmoVisible = true;
+    this._gizmoMode = "all";
     this._snapEnabled = false;
     this._snapValue = 1;
     this._cameraKeyboardEnabled = true;
+
+    // textbox mesh resources
+    this._textTextureMap = new Map();
+
+    // Optional WASM exports (injected by App). Use for CPU-heavy ops when needed.
+    this._wasm = null;
+
+    // Optional script engine (Worker sandbox) injected by App.
+    this._scriptEngine = null;
+    this._selectionSource = "unknown";
+
+    // Runtime vs edit mode.
+    this._runtimeEnabled = false;
+
+    // Placement preview (ghost mesh)
+    this._placementPreviewKind = null;
+    this._placementPreviewMesh = null;
+    this._placementPreviewMaterial = null;
     
 
     // 축
@@ -59,6 +80,277 @@ export default class SceneProject {
 
     if (initialJSON) {
       this._loadMetaFromJSON(initialJSON);
+    }
+  }
+
+  setWasm(wasmExports) {
+    this._wasm = wasmExports || null;
+  }
+
+  getWasm() {
+    return this._wasm;
+  }
+
+  setScriptEngine(engine) {
+    this._scriptEngine = engine || null;
+    try {
+      if (this._scriptEngine && typeof this._scriptEngine.setScripts === 'function') {
+        this._scriptEngine.setScripts(this.getMeshMetaList());
+      }
+    } catch (err) { void err; }
+
+    // fire onLoad for meshes that have it
+    try {
+      if (this._scriptEngine) {
+        for (const meta of this.meshMetaMap.values()) {
+          const scripts = meta?.scripts;
+          const events = scripts && typeof scripts === 'object' ? (scripts.events && typeof scripts.events === 'object' ? scripts.events : scripts) : null;
+          if (meta && meta.id && events && typeof events.onLoad === 'string' && events.onLoad.trim()) {
+            this._runMeshScriptEvent(meta.id, 'onLoad', null);
+          }
+        }
+      }
+    } catch (err) { void err; }
+  }
+
+  setRuntimeEnabled(enabled) {
+    const next = !!enabled;
+    const prev = this._runtimeEnabled;
+    this._runtimeEnabled = next;
+
+    // Runtime mode should not allow editing via gizmos.
+    try {
+      if (next) {
+        this.setGizmoVisible(false);
+      }
+    } catch (err) { void err; }
+
+    // When entering runtime mode, fire onLoad for meshes that have it.
+    try {
+      if (!prev && next && this._scriptEngine) {
+        for (const meta of this.meshMetaMap.values()) {
+          const scripts = meta?.scripts;
+          const events = scripts && typeof scripts === 'object' ? (scripts.events && typeof scripts.events === 'object' ? scripts.events : scripts) : null;
+          if (meta && meta.id && events && typeof events.onLoad === 'string' && events.onLoad.trim()) {
+            this._runMeshScriptEvent(meta.id, 'onLoad', null);
+          }
+        }
+      }
+    } catch (err) { void err; }
+  }
+
+  frameMesh(meshId) {
+    try {
+      if (!meshId) return false;
+      if (!this.camera) return false;
+      const mesh = this.meshMap.get(meshId);
+      if (!mesh) return false;
+
+      let min = null;
+      let max = null;
+      try {
+        const bb = mesh.getHierarchyBoundingVectors(true);
+        min = bb?.min || null;
+        max = bb?.max || null;
+      } catch (err) {
+        void err;
+      }
+
+      if (!min || !max) {
+        try {
+          const bi = mesh.getBoundingInfo?.();
+          const bbox = bi?.boundingBox;
+          min = bbox?.minimumWorld || null;
+          max = bbox?.maximumWorld || null;
+        } catch (err) {
+          void err;
+        }
+      }
+
+      if (!min || !max) {
+        // fallback: target mesh position
+        const pos = mesh.position || Vector3.Zero();
+        this.camera.setTarget(pos);
+        this.camera.radius = Math.max(6, this.camera.radius || 10);
+        return true;
+      }
+
+      const center = min.add(max).scale(0.5);
+      const extent = max.subtract(min);
+      const diag = Math.max(0.001, extent.length());
+      const nextRadius = Math.min(Math.max(diag * 1.6, 4), 5000);
+
+      this.camera.setTarget(center);
+      this.camera.radius = nextRadius;
+      return true;
+    } catch (err) {
+      void err;
+      return false;
+    }
+  }
+
+  // Convert canvas-local screen coordinates into a world position for placing new meshes.
+  // 1) If the cursor is over a pickable mesh, use its picked point.
+  // 2) Otherwise, intersect the camera ray with the y=0 plane.
+  getPlacementPoint(screenX, screenY) {
+    try {
+      if (!this.scene || !this.camera) return null;
+
+      const pick = this.scene.pick(
+        screenX,
+        screenY,
+        (m) => {
+          if (!m) return false;
+          if (this._gridMesh && m === this._gridMesh) return false;
+          return m.isPickable !== false;
+        }
+      );
+
+      if (pick && pick.hit && pick.pickedPoint) {
+        return { x: pick.pickedPoint.x, y: pick.pickedPoint.y, z: pick.pickedPoint.z };
+      }
+
+      const ray = this.scene.createPickingRay(screenX, screenY, Matrix.Identity(), this.camera);
+      const origin = ray.origin;
+      const dir = ray.direction;
+      if (!dir || Math.abs(dir.y) < 1e-6) return null;
+      const t = -origin.y / dir.y;
+      if (t < 0) return null;
+      const p = origin.add(dir.scale(t));
+      return { x: p.x, y: 0, z: p.z };
+    } catch (err) {
+      void err;
+      return null;
+    }
+  }
+
+  setPlacementPreviewKind(kind) {
+    const next = kind ? String(kind) : null;
+    if (this._placementPreviewKind === next) return;
+    this._placementPreviewKind = next;
+    this._disposePlacementPreview();
+    if (next) this._ensurePlacementPreviewMesh(next);
+  }
+
+  clearPlacementPreview() {
+    this._placementPreviewKind = null;
+    this._disposePlacementPreview();
+  }
+
+  updatePlacementPreview(screenX, screenY) {
+    try {
+      if (!this.scene || !this.camera) return null;
+      if (!this._placementPreviewKind) return null;
+
+      this._ensurePlacementPreviewMesh(this._placementPreviewKind);
+      const mesh = this._placementPreviewMesh;
+      if (!mesh) return null;
+
+      const point = this.getPlacementPoint(screenX, screenY);
+      if (!point) {
+        try { mesh.setEnabled(false); } catch { void 0; }
+        return null;
+      }
+
+      try { mesh.setEnabled(true); } catch { void 0; }
+      try { mesh.position.copyFromFloats(point.x, point.y, point.z); } catch { void 0; }
+      return point;
+    } catch (err) {
+      void err;
+      return null;
+    }
+  }
+
+  _disposePlacementPreview() {
+    try {
+      if (this._placementPreviewMesh) {
+        try { this._placementPreviewMesh.dispose(); } catch (err) { void err; }
+      }
+    } finally {
+      this._placementPreviewMesh = null;
+    }
+    try {
+      if (this._placementPreviewMaterial) {
+        try { this._placementPreviewMaterial.dispose(); } catch (err) { void err; }
+      }
+    } finally {
+      this._placementPreviewMaterial = null;
+    }
+  }
+
+  _ensurePlacementPreviewMesh(kind) {
+    try {
+      if (!this.scene) return;
+      if (this._placementPreviewMesh) return;
+
+      const previewId = `__preview__${this.id}`;
+      const meta = createMeta(kind, { id: previewId, name: "__preview__" });
+      let mesh;
+
+      if (meta.kind === "box") mesh = MeshBuilder.CreateBox(previewId, meta.params, this.scene);
+      else if (meta.kind === "sphere") mesh = MeshBuilder.CreateSphere(previewId, meta.params, this.scene);
+      else if (meta.kind === "cylinder") mesh = MeshBuilder.CreateCylinder(previewId, meta.params, this.scene);
+      else if (meta.kind === "cone") {
+        const p = { ...meta.params };
+        if (p.diameterTop === undefined) p.diameterTop = 0;
+        mesh = MeshBuilder.CreateCylinder(previewId, p, this.scene);
+      } else if (meta.kind === "line") {
+        mesh = MeshBuilder.CreateSphere(previewId, { diameter: 0.3, segments: 8 }, this.scene);
+      } else if (meta.kind === "tetra") {
+        const p = { size: 1, ...(meta.params || {}) };
+        mesh = MeshBuilder.CreatePolyhedron(previewId, { type: 0, size: p.size }, this.scene);
+      } else if (meta.kind === "torus") {
+        const p = { diameter: 1, thickness: 0.25, tessellation: 32, ...(meta.params || {}) };
+        mesh = MeshBuilder.CreateTorus(previewId, p, this.scene);
+      } else if (meta.kind === "textbox") {
+        const p = { width: 2, height: 1, ...(meta.params || {}) };
+        mesh = MeshBuilder.CreatePlane(previewId, { width: p.width, height: p.height }, this.scene);
+      } else {
+        mesh = MeshBuilder.CreateBox(previewId, { size: 1 }, this.scene);
+      }
+
+      mesh.isPickable = false;
+      try { mesh.setEnabled(false); } catch { void 0; }
+      try { mesh.alwaysSelectAsActiveMesh = false; } catch { void 0; }
+
+      const mat = new StandardMaterial(`mat-preview-${this.id}`, this.scene);
+      mat.diffuseColor = new Color3(0.9, 0.9, 0.95);
+      mat.emissiveColor = new Color3(0.22, 0.35, 0.65);
+      mat.specularPower = 0;
+      mat.alpha = 0.32;
+      try { mat.backFaceCulling = false; } catch (err) { void err; }
+      mesh.material = mat;
+
+      this._placementPreviewMesh = mesh;
+      this._placementPreviewMaterial = mat;
+    } catch (err) {
+      void err;
+    }
+  }
+
+  _syncScriptEngineScripts() {
+    try {
+      if (this._scriptEngine && typeof this._scriptEngine.setScripts === 'function') {
+        this._scriptEngine.setScripts(this.getMeshMetaList());
+      }
+    } catch (err) { void err; }
+  }
+
+  async _runMeshScriptEvent(meshId, eventName, payload = null) {
+    try {
+      if (!this._scriptEngine || typeof this._scriptEngine.run !== 'function') return;
+      const meta = this.meshMetaMap.get(meshId);
+      if (!meta || !meta.scripts) return;
+
+      const sceneInfo = { id: this.id, name: this.name };
+      const cmds = await this._scriptEngine.run({ eventName, meshId, scene: sceneInfo, payload });
+      if (!cmds || !cmds.length) return;
+      // Apply returned commands through the existing command pipeline.
+      for (const c of cmds) {
+        if (c && typeof c === 'object' && c.type) this.enqueueCommand(c);
+      }
+    } catch (err) {
+      try { console.warn('[script] event failed', eventName, meshId, err); } catch { void 0; }
     }
   }
 
@@ -112,6 +404,18 @@ export default class SceneProject {
     // create runtime meshes from meta map
     for (const meta of this.meshMetaMap.values()) this._createRuntimeMesh(meta);
 
+    // second pass: attach parents now that all runtime nodes exist
+    try {
+      for (const meta of this.meshMetaMap.values()) {
+        if (!meta.parent) continue;
+        const child = this.meshMap.get(meta.id);
+        const parent = this.meshMap.get(meta.parent);
+        if (child && parent) {
+          try { child.parent = parent; } catch (err) { void err; }
+        }
+      }
+    } catch (err) { void err; }
+
     // if grid requested earlier, create now
     if (this._gridVisible) this._createGrid();
     // only create axes if requested
@@ -119,7 +423,7 @@ export default class SceneProject {
       try { this._axesHelper = new AxesHelper(this.scene, this._gridSize); } catch (err) { void err; this._axesHelper = null; }
     }
 
-    // pointer pick handling
+    // pointer pick + runtime script events
     this.scene.onPointerObservable.add((pi) => {
       if (!this.scene) return;
       if (pi.type === PointerEventTypes.POINTERPICK) {
@@ -133,13 +437,36 @@ export default class SceneProject {
           // If a mesh is a child (has parent), ensure we select root mesh that has meta id in meshMap
           while (mesh && !this.meshMap.has(mesh.id) && mesh.parent) mesh = mesh.parent;
           if (mesh && this.meshMap.has(mesh.id)) {
-            this._selectMeshById(mesh.id);
+            this._selectMeshById(mesh.id, "pick");
+
+            // In runtime mode, clicking a mesh triggers its onClick script.
+            if (this._runtimeEnabled) {
+              try { this._runMeshScriptEvent(mesh.id, 'onClick', { x: this.scene.pointerX, y: this.scene.pointerY }); } catch { void 0; }
+            }
           } else {
             // clicked empty space or untracked mesh
-            this._selectMeshById(null);
+            this._selectMeshById(null, "pick");
           }
         } else {
-          this._selectMeshById(null);
+          this._selectMeshById(null, "pick");
+        }
+      }
+
+      if (this._runtimeEnabled && (pi.type === PointerEventTypes.POINTERDOWN || pi.type === PointerEventTypes.POINTERUP)) {
+        try {
+          const pick = this.scene.pick(this.scene.pointerX, this.scene.pointerY);
+          if (!pick || !pick.hit || !pick.pickedMesh) return;
+          const picked = pick.pickedMesh;
+          if (this._gridMesh && picked === this._gridMesh) return;
+          let mesh = picked;
+          while (mesh && !this.meshMap.has(mesh.id) && mesh.parent) mesh = mesh.parent;
+          if (!mesh || !this.meshMap.has(mesh.id)) return;
+
+          const eventName = (pi.type === PointerEventTypes.POINTERDOWN) ? 'onMouseDown' : 'onMouseUp';
+          const button = (pi.event && typeof pi.event.button === 'number') ? pi.event.button : 0;
+          this._runMeshScriptEvent(mesh.id, eventName, { x: this.scene.pointerX, y: this.scene.pointerY, button });
+        } catch (err) {
+          void err;
         }
       }
     });
@@ -315,6 +642,7 @@ export default class SceneProject {
   _shutdownEngineOnly() {
     window.removeEventListener("resize", this._onResize);
     if (this.scene) {
+      try { this._disposePlacementPreview(); } catch (err) { void err; }
       for (const m of this.scene.meshes.slice()) { try { m.dispose(); } catch (err) { void err; } }
       try { this.scene.dispose(); } catch (err) { void err; }
       this.scene = null;
@@ -335,6 +663,13 @@ export default class SceneProject {
     if (this._gridMesh) { try { this._gridMesh.dispose(); } catch (err) { void err; } this._gridMesh = null; }
     if (this._gridMaterial) { try { this._gridMaterial.dispose(); } catch (err) { void err; } this._gridMaterial = null; }
     if (this._gizmoManager) { try { this._gizmoManager.attachToMesh(null); } catch (err) { void err; } this._gizmoManager = null; }
+
+    try {
+      for (const dt of this._textTextureMap.values()) {
+        try { dt.dispose(); } catch (err) { void err; }
+      }
+      this._textTextureMap.clear();
+    } catch (err) { void err; }
 
     for (const mat of this.materialMap.values()) { try { mat.dispose(); } catch (err) { void err; } }
     this.materialMap.clear();
@@ -437,13 +772,16 @@ export default class SceneProject {
   _applyCommand(cmd) {
     const { type, payload } = cmd;
     if (type === "createMesh") {
-      const { kind, params = {}, position, rotation, scaling, id, name, material, parent } = payload;
-      const meta = createMeta(kind, { id, name, params, parent, position, rotation, scaling, material });
+      const { kind, params = {}, position, rotation, scaling, id, name, material, parent, scripts } = payload;
+      const meta = createMeta(kind, { id, name, params, parent, position, rotation, scaling, material, scripts });
       this.meshMetaMap.set(meta.id, meta);
       try {
         console.log("SceneProject: applyCommand createMesh", meta.id, "kind", meta.kind, "sceneReady", !!this.scene);
       } catch (err) { void err; }
       if (this.scene) this._createRuntimeMesh(meta);
+
+      // keep script engine caches fresh
+      this._syncScriptEngineScripts();
       return;
     }
 
@@ -457,6 +795,10 @@ export default class SceneProject {
       if (changes.scaling) Object.assign(meta.scaling, changes.scaling);
       if (changes.material) Object.assign(meta.material, changes.material);
       if (changes.parent !== undefined) meta.parent = changes.parent;
+      if (changes.scripts !== undefined) meta.scripts = changes.scripts;
+      if (changes.params) meta.params = { ...(meta.params || {}), ...(changes.params || {}) };
+
+      if (changes.scripts !== undefined) this._syncScriptEngineScripts();
 
       if (this.scene) {
         const mesh = this.meshMap.get(id);
@@ -479,12 +821,150 @@ export default class SceneProject {
           if (changes.name) mesh.name = meta.name;
           if (changes.parent !== undefined) {
             const p = this.meshMap.get(meta.parent);
-            try { mesh.parent = p || null; } catch (err) { void err; }
+            try {
+              if (typeof mesh.setParent === "function") mesh.setParent(p || null);
+              else mesh.parent = p || null;
+            } catch (err) { void err; }
+
+            // Parent change can alter local transform (preserve world), so sync back.
+            try {
+              if (mesh.position) Object.assign(meta.position, { x: mesh.position.x, y: mesh.position.y, z: mesh.position.z });
+              if (mesh.rotation) Object.assign(meta.rotation, { x: mesh.rotation.x, y: mesh.rotation.y, z: mesh.rotation.z });
+              if (mesh.scaling) Object.assign(meta.scaling, { x: mesh.scaling.x, y: mesh.scaling.y, z: mesh.scaling.z });
+            } catch (err) { void err; }
           }
         }
         if (changes.material) this._applyMaterialToMesh(meta);
+        if (changes.params && meta.kind === 'textbox') this._applyMaterialToMesh(meta);
         try { console.log("SceneProject: applied updateMesh", id, changes); } catch (err) { void err; }
       }
+      return;
+    }
+
+    if (type === "groupMeshes") {
+      const { id, name, childIds = [] } = payload || {};
+      const ids = Array.isArray(childIds) ? childIds.filter(Boolean) : [];
+      if (!ids.length) return;
+
+      const childMetas = ids.map((cid) => this.meshMetaMap.get(cid)).filter(Boolean);
+      if (!childMetas.length) return;
+
+      // common parent if all selected share it
+      let commonParent = childMetas[0].parent || null;
+      for (const cm of childMetas) {
+        if ((cm.parent || null) !== commonParent) { commonParent = null; break; }
+      }
+
+      // center based on runtime absolute positions when possible
+      let cx = 0, cy = 0, cz = 0, n = 0;
+      for (const cm of childMetas) {
+        const rt = this.meshMap.get(cm.id);
+        try {
+          if (rt && typeof rt.getAbsolutePosition === "function") {
+            const ap = rt.getAbsolutePosition();
+            cx += ap.x; cy += ap.y; cz += ap.z; n += 1;
+            continue;
+          }
+        } catch (err) { void err; }
+        cx += cm.position?.x || 0;
+        cy += cm.position?.y || 0;
+        cz += cm.position?.z || 0;
+        n += 1;
+      }
+      if (n < 1) return;
+      const worldCenter = { x: cx / n, y: cy / n, z: cz / n };
+
+      // If we create the group under a parent, store the group's position in that parent's local space.
+      // We prefer runtime matrix conversion (handles rotated/scaled parents) when available.
+      let groupPosition = { ...worldCenter };
+      if (commonParent) {
+        const parentRuntime = this.meshMap.get(commonParent);
+        try {
+          if (parentRuntime && typeof parentRuntime.getWorldMatrix === "function") {
+            const inv = Matrix.Invert(parentRuntime.getWorldMatrix());
+            const local = Vector3.TransformCoordinates(
+              new Vector3(worldCenter.x, worldCenter.y, worldCenter.z),
+              inv
+            );
+            groupPosition = { x: local.x, y: local.y, z: local.z };
+          }
+        } catch (err) {
+          void err;
+        }
+      }
+
+      const meta = createMeta("group", {
+        id,
+        name,
+        parent: commonParent,
+        position: groupPosition,
+        rotation: { x: 0, y: 0, z: 0 },
+        scaling: { x: 1, y: 1, z: 1 },
+      });
+      this.meshMetaMap.set(meta.id, meta);
+      if (this.scene) this._createRuntimeMesh(meta);
+
+      const groupRuntime = this.meshMap.get(meta.id) || null;
+      for (const cm of childMetas) {
+        cm.parent = meta.id;
+        const childRuntime = this.meshMap.get(cm.id);
+        if (childRuntime) {
+          try {
+            if (typeof childRuntime.setParent === "function") childRuntime.setParent(groupRuntime);
+            else childRuntime.parent = groupRuntime;
+          } catch (err) { void err; }
+          try {
+            if (childRuntime.position) Object.assign(cm.position, { x: childRuntime.position.x, y: childRuntime.position.y, z: childRuntime.position.z });
+            if (childRuntime.rotation) Object.assign(cm.rotation, { x: childRuntime.rotation.x, y: childRuntime.rotation.y, z: childRuntime.rotation.z });
+            if (childRuntime.scaling) Object.assign(cm.scaling, { x: childRuntime.scaling.x, y: childRuntime.scaling.y, z: childRuntime.scaling.z });
+          } catch (err) { void err; }
+        }
+      }
+      return;
+    }
+
+    if (type === "ungroup") {
+      const { id } = payload || {};
+      if (!id) return;
+      const groupMeta = this.meshMetaMap.get(id);
+      if (!groupMeta) return;
+      if (groupMeta.kind !== "group") return;
+
+      const parentId = groupMeta.parent || null;
+      const parentRuntime = parentId ? (this.meshMap.get(parentId) || null) : null;
+
+      // find current children
+      const children = [];
+      for (const m of this.meshMetaMap.values()) {
+        if ((m.parent || null) === id) children.push(m);
+      }
+
+      for (const cm of children) {
+        cm.parent = parentId;
+        const childRuntime = this.meshMap.get(cm.id);
+        if (childRuntime) {
+          try {
+            if (typeof childRuntime.setParent === "function") childRuntime.setParent(parentRuntime);
+            else childRuntime.parent = parentRuntime;
+          } catch (err) { void err; }
+          try {
+            if (childRuntime.position) Object.assign(cm.position, { x: childRuntime.position.x, y: childRuntime.position.y, z: childRuntime.position.z });
+            if (childRuntime.rotation) Object.assign(cm.rotation, { x: childRuntime.rotation.x, y: childRuntime.rotation.y, z: childRuntime.rotation.z });
+            if (childRuntime.scaling) Object.assign(cm.scaling, { x: childRuntime.scaling.x, y: childRuntime.scaling.y, z: childRuntime.scaling.z });
+          } catch (err) { void err; }
+        }
+      }
+
+      const groupRuntime = this.meshMap.get(id);
+      if (groupRuntime) {
+        try { groupRuntime.dispose(); } catch (err) { void err; }
+        this.meshMap.delete(id);
+      }
+      const mat = this.materialMap.get(id);
+      if (mat) { try { mat.dispose(); } catch (err) { void err; } this.materialMap.delete(id); }
+
+      this.meshMetaMap.delete(id);
+      if (this._selectedId === id) this._selectMeshById(null, "api");
       return;
     }
 
@@ -494,10 +974,14 @@ export default class SceneProject {
       if (mesh) { try { mesh.dispose(); } catch (err) { void err; } this.meshMap.delete(id); }
       const mat = this.materialMap.get(id);
       if (mat) { try { mat.dispose(); } catch (err) { void err; } this.materialMap.delete(id); }
+      const dt = this._textTextureMap.get(id);
+      if (dt) { try { dt.dispose(); } catch (err) { void err; } this._textTextureMap.delete(id); }
       this.meshMetaMap.delete(id);
       if (this._selectedId === id) {
-        this._selectMeshById(null);
+        this._selectMeshById(null, "api");
       }
+
+      this._syncScriptEngineScripts();
       return;
     }
 
@@ -573,6 +1057,31 @@ export default class SceneProject {
   }
 
   _createRuntimeMesh(meta) {
+    if (meta.kind === "group") {
+      const mesh = MeshBuilder.CreateBox(meta.id, { size: 0.01 }, this.scene);
+      mesh.name = meta.name || meta.id;
+      try { mesh.position.copyFromFloats(meta.position.x, meta.position.y, meta.position.z); } catch { void 0; }
+      try { if (mesh.rotation) mesh.rotation.copyFromFloats(meta.rotation.x, meta.rotation.y, meta.rotation.z); } catch { void 0; }
+      try { if (mesh.scaling) mesh.scaling.copyFromFloats(meta.scaling.x, meta.scaling.y, meta.scaling.z); } catch { void 0; }
+      try { mesh.isPickable = false; } catch { void 0; }
+      try { mesh.visibility = 0; } catch { void 0; }
+      try { mesh.alwaysSelectAsActiveMesh = false; } catch { void 0; }
+
+      if (meta.parent) {
+        const pm = this.meshMap.get(meta.parent);
+        if (pm) {
+          try {
+            // For initial creation we want meta.position/rotation/scaling to be treated as LOCAL.
+            // Using setParent() would preserve world transform and can corrupt intended locals.
+            mesh.parent = pm;
+          } catch { void 0; }
+        }
+      }
+
+      this.meshMap.set(meta.id, mesh);
+      return;
+    }
+
     let mesh;
     if (meta.kind === "box") mesh = MeshBuilder.CreateBox(meta.id, meta.params, this.scene);
     else if (meta.kind === "sphere") mesh = MeshBuilder.CreateSphere(meta.id, meta.params, this.scene);
@@ -588,6 +1097,16 @@ export default class SceneProject {
       mesh = MeshBuilder.CreateLines(meta.id, { points: pts }, this.scene);
       // ensure lines are pickable like other meshes? typically no, but preserve basic behavior
       mesh.isPickable = true;
+    } else if (meta.kind === "tetra") {
+      // Tetrahedron via polyhedron type 0
+      const p = { size: 1, ...(meta.params || {}) };
+      mesh = MeshBuilder.CreatePolyhedron(meta.id, { type: 0, size: p.size }, this.scene);
+    } else if (meta.kind === "torus") {
+      const p = { diameter: 1, thickness: 0.25, tessellation: 32, ...(meta.params || {}) };
+      mesh = MeshBuilder.CreateTorus(meta.id, p, this.scene);
+    } else if (meta.kind === "textbox") {
+      const p = { width: 2, height: 1, ...(meta.params || {}) };
+      mesh = MeshBuilder.CreatePlane(meta.id, { width: p.width, height: p.height }, this.scene);
     } else {
       mesh = MeshBuilder.CreateBox(meta.id, { size: 1 }, this.scene);
     }
@@ -620,6 +1139,37 @@ export default class SceneProject {
     this._applyMaterialToMesh(meta);
   }
 
+  _drawTextBoxTexture(dt, meta) {
+    try {
+      if (!dt || !meta) return;
+      const text = (meta.params && typeof meta.params.text === 'string') ? meta.params.text : 'Text';
+      const fontSize = Math.max(10, Math.min(256, Number(meta.params?.fontSize) || 64));
+      const c = meta.material?.color ?? { r: 1, g: 1, b: 1 };
+      const r = Math.max(0, Math.min(255, Math.round((c.r ?? 1) * 255)));
+      const g = Math.max(0, Math.min(255, Math.round((c.g ?? 1) * 255)));
+      const b = Math.max(0, Math.min(255, Math.round((c.b ?? 1) * 255)));
+
+      const ctx = dt.getContext();
+      const w = dt.getSize().width;
+      const h = dt.getSize().height;
+      ctx.clearRect(0, 0, w, h);
+      ctx.fillStyle = `rgba(${r},${g},${b},1)`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = `${fontSize}px monospace`;
+
+      // simple multi-line support
+      const lines = String(text).split(/\r?\n/);
+      const lineH = fontSize * 1.25;
+      const startY = h / 2 - (lines.length - 1) * (lineH / 2);
+      for (let i = 0; i < lines.length; i++) {
+        ctx.fillText(lines[i], w / 2, startY + i * lineH);
+      }
+
+      dt.update();
+    } catch (err) { void err; }
+  }
+
   _applyMaterialToMesh(meta) {
     if (!this.scene) return;
     const mesh = this.meshMap.get(meta.id);
@@ -627,6 +1177,36 @@ export default class SceneProject {
 
     const c = meta.material?.color ?? { r: 0.9, g: 0.9, b: 0.9 };
     const spec = meta.material?.specularPower ?? 64;
+    const type = (meta.material && typeof meta.material.type === "string") ? meta.material.type : "standard";
+
+    // special-case for textbox meshes: keep a text DynamicTexture material
+    if (meta.kind === "textbox") {
+      let mat = this.materialMap.get(meta.id);
+      if (!mat) {
+        mat = new StandardMaterial(`mat-${meta.id}`, this.scene);
+        this.materialMap.set(meta.id, mat);
+        mesh.material = mat;
+      }
+
+      // Ensure a dynamic texture exists
+      let dt = this._textTextureMap.get(meta.id);
+      if (!dt) {
+        const dpi = window.devicePixelRatio || 1;
+        const texSize = Math.min(1024, Math.max(512, Math.floor(512 * dpi)));
+        dt = new DynamicTexture(`text-dt-${meta.id}`, { width: texSize, height: texSize }, this.scene, false);
+        try { dt.hasAlpha = true; } catch (err) { void err; }
+        this._textTextureMap.set(meta.id, dt);
+      }
+
+      try { mat.diffuseTexture = dt; } catch (err) { void err; }
+      try { mat.emissiveColor = new Color3(1, 1, 1); } catch (err) { void err; }
+      try { mat.specularPower = 0; } catch (err) { void err; }
+      try { mat.backFaceCulling = false; } catch (err) { void err; }
+      try { mat.useAlphaFromDiffuseTexture = true; } catch (err) { void err; }
+
+      this._drawTextBoxTexture(dt, meta);
+      return;
+    }
 
     // special-case for line meshes: set color property on LinesMesh and skip StandardMaterial
     if (meta.kind === "line") {
@@ -639,22 +1219,39 @@ export default class SceneProject {
 
     let mat = this.materialMap.get(meta.id);
 
-    if (!mat) {
+    if (type === "pbr") {
+      if (!mat || !(mat instanceof PBRMaterial)) {
+        if (mat) { try { mat.dispose(); } catch (err) { void err; } }
+        mat = new PBRMaterial(`mat-${meta.id}`, this.scene);
+        this.materialMap.set(meta.id, mat);
+        mesh.material = mat;
+      }
+
+      try { mat.albedoColor = new Color3(c.r, c.g, c.b); } catch (err) { void err; }
+      try { mat.metallic = Math.max(0, Math.min(1, Number(meta.material?.metallic ?? 0))); } catch (err) { void err; }
+      try { mat.roughness = Math.max(0, Math.min(1, Number(meta.material?.roughness ?? 0.4))); } catch (err) { void err; }
+      try { mat.alpha = Math.max(0, Math.min(1, Number(meta.material?.alpha ?? 1))); } catch (err) { void err; }
+      return;
+    }
+
+    // default: StandardMaterial
+    if (!mat || !(mat instanceof StandardMaterial)) {
+      if (mat) { try { mat.dispose(); } catch (err) { void err; } }
       mat = new StandardMaterial(`mat-${meta.id}`, this.scene);
       this.materialMap.set(meta.id, mat);
       mesh.material = mat;
     }
 
-    if (mat.diffuseColor) {
-      mat.diffuseColor.set(c.r, c.g, c.b);
-    } else {
-      mat.diffuseColor = new Color3(c.r, c.g, c.b);
-    }
-    mat.specularPower = spec;
+    try {
+      if (mat.diffuseColor) mat.diffuseColor.set(c.r, c.g, c.b);
+      else mat.diffuseColor = new Color3(c.r, c.g, c.b);
+    } catch (err) { void err; }
+    try { mat.specularPower = spec; } catch (err) { void err; }
+    try { mat.alpha = Math.max(0, Math.min(1, Number(meta.material?.alpha ?? 1))); } catch (err) { void err; }
   }
 
   // Selection & highlight helpers
-  _selectMeshById(id) {
+  _selectMeshById(id, source = "unknown") {
     if (this._selectedId === id) return;
     // clear previous selection outline/edges
     if (this._selectedId) {
@@ -672,6 +1269,7 @@ export default class SceneProject {
     }
 
     this._selectedId = id || null;
+    this._selectionSource = source || "unknown";
 
     // apply new selection style: prefer renderOutline (silhouette outline), fallback to edges rendering
     if (id) {
@@ -695,9 +1293,9 @@ export default class SceneProject {
       }
     }
 
-    // attach/detach gizmo to selected mesh
+    // attach/detach gizmo to selected mesh (edit mode only)
     try {
-      if (this._gizmoManager) {
+      if (this._gizmoManager && this._gizmoVisible && !this._runtimeEnabled) {
         const attach = this._selectedId ? this.meshMap.get(this._selectedId) : null;
         // if attached mesh has non-uniform scaling, ensure gizmo rotation matching is disabled to avoid Babylon warning
         try {
@@ -745,11 +1343,13 @@ export default class SceneProject {
         if (this._gizmoManager.positionGizmo) {
           try { this._gizmoManager.positionGizmo.snapDistance = this._snapEnabled ? this._snapValue : 0; } catch { void 0; }
         }
+      } else if (this._gizmoManager) {
+        try { this._gizmoManager.attachToMesh(null); } catch { void 0; }
       }
     } catch (e) { void e; }
     // call callback
     if (typeof this.onSelect === "function") {
-      try { this.onSelect(this._selectedId); } catch { void 0; }
+      try { this.onSelect(this._selectedId, { source: this._selectionSource }); } catch { void 0; }
     }
   }
 
@@ -760,9 +1360,9 @@ export default class SceneProject {
   setChangeCallback(fn) { this._changeCallback = fn; }
 
   // Public API: highlight programmatically
-  highlightMesh(id) { this._selectMeshById(id); }
+  highlightMesh(id) { this._selectMeshById(id, "api"); }
 
-  clearAllHighlights() { this._selectMeshById(null); }
+  clearAllHighlights() { this._selectMeshById(null, "api"); }
 
   // 축 표시 제어
   setAxesVisible(visible) {
@@ -827,12 +1427,51 @@ export default class SceneProject {
   // Gizmo mode: 'position' | 'rotation' | 'scale' | 'none' | 'all'
   setGizmoMode(mode) {
     try {
-      if (!this._gizmoManager) return;
       const m = (mode || "none").toString();
+      this._gizmoMode = m;
+      if (this._runtimeEnabled) return;
+      if (!this._gizmoVisible) return;
+      if (!this._gizmoManager) return;
       this._gizmoManager.positionGizmoEnabled = (m === "position" || m === "all");
       this._gizmoManager.rotationGizmoEnabled = (m === "rotation" || m === "all");
       this._gizmoManager.scaleGizmoEnabled = (m === "scale" || m === "all");
       if (m === "none") this._gizmoManager.attachToMesh(null);
+    } catch (e) { void e; }
+  }
+
+  // Allow App/UI to toggle gizmo visibility.
+  setGizmoVisible(visible) {
+    const want = !!visible;
+    this._gizmoVisible = want;
+    try {
+      if (!this._gizmoManager) return;
+      if (!want) {
+        this._gizmoManager.positionGizmoEnabled = false;
+        this._gizmoManager.rotationGizmoEnabled = false;
+        this._gizmoManager.scaleGizmoEnabled = false;
+        try { this._gizmoManager.attachToMesh(null); } catch { void 0; }
+        return;
+      }
+
+      if (this._runtimeEnabled) {
+        // runtime cannot re-enable gizmos
+        this._gizmoManager.positionGizmoEnabled = false;
+        this._gizmoManager.rotationGizmoEnabled = false;
+        this._gizmoManager.scaleGizmoEnabled = false;
+        try { this._gizmoManager.attachToMesh(null); } catch { void 0; }
+        return;
+      }
+
+      // restore last known mode
+      try { this.setGizmoMode(this._gizmoMode || "position"); } catch { void 0; }
+
+      // if we have a selection and mode isn't none, re-attach
+      try {
+        if (this._gizmoManager && this._selectedId && (this._gizmoMode || "none") !== "none") {
+          const attach = this.meshMap.get(this._selectedId);
+          if (attach) this._gizmoManager.attachToMesh(attach);
+        }
+      } catch { void 0; }
     } catch (e) { void e; }
   }
 
@@ -964,7 +1603,8 @@ export default class SceneProject {
       meshes.push({
         id: m.id, name: m.name, kind: m.kind, params: m.params, parent: m.parent,
         position, rotation, scaling,
-        material: { ...m.material }
+        material: { ...m.material },
+        scripts: m.scripts ? JSON.parse(JSON.stringify(m.scripts)) : null
       });
     }
     const camera = this.camera ? { type: "arcRotate", alpha: this.camera.alpha, beta: this.camera.beta, radius: this.camera.radius } : null;
@@ -974,9 +1614,16 @@ export default class SceneProject {
   _loadMetaFromJSON(json) {
     if (!json || !json.meshes) return;
     for (const m of json.meshes) {
-      const meta = createMeta(m.kind, { id: m.id, name: m.name, params: m.params, parent: m.parent, position: m.position, rotation: m.rotation, scaling: m.scaling, material: m.material });
+      const meta = createMeta(m.kind, { id: m.id, name: m.name, params: m.params, parent: m.parent, position: m.position, rotation: m.rotation, scaling: m.scaling, material: m.material, scripts: m.scripts });
       this.meshMetaMap.set(meta.id, meta);
     }
+
+    // keep script engine in sync
+    try {
+      if (this._scriptEngine && typeof this._scriptEngine.setScripts === 'function') {
+        this._scriptEngine.setScripts(this.getMeshMetaList());
+      }
+    } catch (err) { void err; }
   }
 
   loadFromJSON(json) {

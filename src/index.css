@@ -1,3 +1,5 @@
+@import "./styles/ui.css";
+
 :root {
   --bg-0: #0b0d13;
   --bg-1: #121421;
@@ -12,6 +14,25 @@
   --glass: rgba(255,255,255,0.02);
   --radius: 8px;
   --base-font: 13px;
+  --font-ui: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+
+  --bg-grad-spot: #1c1f33;
+  --bg-grad-base: var(--bg-0);
+}
+
+html[data-theme="light"] {
+  --bg-0: #f7f9ff;
+  --bg-1: #ffffff;
+  --panel: #f2f5fc;
+  --panel-2: #ffffff;
+  --border: rgba(15, 23, 42, 0.10);
+  --text: #0b1220;
+  --muted: rgba(15, 23, 42, 0.62);
+  --glass: rgba(0,0,0,0.03);
+
+  --bg-grad-spot: #dfe9ff;
+  --bg-grad-base: var(--bg-0);
 }
 
 * { box-sizing: border-box; }
@@ -20,9 +41,9 @@ html, body, #root { height: 100%; width: 100%; }
 
 body {
   margin: 0;
-  background: radial-gradient(1200px 600px at 20% -10%, #1c1f33 0%, var(--bg-0) 60%) fixed;
+  background: radial-gradient(1200px 600px at 20% -10%, var(--bg-grad-spot) 0%, var(--bg-grad-base) 60%) fixed;
   color: var(--text);
-  font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  font-family: var(--font-ui);
   font-size: var(--base-font);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -30,71 +51,6 @@ body {
 
 /* Canvas should fill its container */
 canvas { display: block; width: 100%; height: 100%; }
-
-/* Buttons */
-button {
-  border-radius: var(--radius);
-  border: 1px solid var(--border);
-  padding: 8px 12px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text);
-  background: var(--panel-2);
-  cursor: pointer;
-}
-button:hover { background: rgba(255,255,255,0.03); }
-button:active { background: rgba(255,255,255,0.02); }
-
-button:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 28%, transparent);
-  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
-}
-
-/* Icon-style small square buttons (used for left icon bar and mesh icons) */
-.icon-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
-  padding: 6px;
-  background: transparent;
-  border: 1px solid var(--border);
-  cursor: pointer;
-}
-.icon-btn:focus {
-  outline: none;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
-  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
-}
-
-/* small circular variant */
-.icon-btn-circle {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-}
-
-/* Mesh add icon appearance */
-.icon-btn .svg { width: 18px; height: 18px; fill: currentColor; }
-
-/* Inputs - nicer, compact */
-.input {
-  width: 100%;
-  padding: 8px 10px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: rgba(255,255,255,0.02);
-  color: var(--text);
-  font-size: 13px;
-}
-.input:focus {
-  outline: none;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent);
-  border-color: color-mix(in srgb, var(--accent) 28%, transparent);
-}
 
 /* Inspector specific */
 .inspector-label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }

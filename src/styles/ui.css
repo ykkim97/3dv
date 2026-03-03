@@ -1,0 +1,82 @@
+/* src/styles/ui.css
+  Shared UI primitives: buttons, icon buttons, inputs.
+  Keep theme tokens in index.css.
+*/
+
+/* Buttons */
+button {
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--panel-2);
+  cursor: pointer;
+}
+button:hover { background: rgba(255,255,255,0.03); }
+button:active { background: rgba(255,255,255,0.02); }
+
+button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 28%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+/* Icon-style small square buttons (used for left icon bar and mesh icons) */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  padding: 6px;
+  background: transparent;
+  border: 1px solid var(--border);
+  cursor: pointer;
+}
+.icon-btn:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.icon-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.icon-btn:disabled:hover {
+  background: transparent;
+}
+
+/* small circular variant */
+.icon-btn-circle {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+}
+
+/* Mesh add icon appearance */
+.icon-btn .svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
+
+/* Inputs - nice, compact */
+.input {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.02);
+  color: var(--text);
+  font-size: 13px;
+}
+.input:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 28%, transparent);
+}

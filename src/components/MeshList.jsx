@@ -26,7 +26,11 @@ function KindIcon({ kind }) {
     cylinder: "var(--warn)",
     cone: "#9b5cf6",
     line: "var(--muted)",
-    merged: "rgba(255,255,255,0.4)"
+    tetra: "var(--accent)",
+    torus: "var(--accent-2)",
+    textbox: "rgba(255,255,255,0.65)",
+    merged: "rgba(255,255,255,0.4)",
+    group: "rgba(255,255,255,0.35)"
   };
 
   return (
@@ -40,26 +44,50 @@ function KindIcon({ kind }) {
   );
 }
 
-function TreeItem({ node, level = 0, onSelect, selectedId, onDelete, expandedIds, toggleExpand, selectedIdsSet, onSelectionChange }) {
+function TreeItem({ node, level = 0, onSelect, selectedId, onDelete, onContextMenu, expandedIds, toggleExpand, selectedIdsSet, onMoveToGroup }) {
   const isSelected = selectedId === node.id;
   const isExpanded = expandedIds.has(node.id);
   const isMultiSelected = selectedIdsSet && selectedIdsSet.has(node.id);
+  const isGroup = node.kind === "group";
   const indent = level * 12;
 
-  const handleClick = (e) => {
-    // multi-select when ctrl/cmd is held
-    if ((e.ctrlKey || e.metaKey) && typeof onSelectionChange === "function") {
-      const next = new Set(selectedIdsSet || []);
-      if (next.has(node.id)) next.delete(node.id);
-      else next.add(node.id);
-      onSelectionChange(next);
-      // also notify single select so highlighting works
-      if (typeof onSelect === "function") onSelect(node.id, e);
-    } else {
-      // normal single select
-      if (typeof onSelectionChange === "function") onSelectionChange(new Set([node.id]));
-      if (typeof onSelect === "function") onSelect(node.id, e);
+  const handleDragStart = (e) => {
+    try {
+      const ids = (selectedIdsSet && selectedIdsSet.size > 1 && selectedIdsSet.has(node.id))
+        ? Array.from(selectedIdsSet)
+        : [node.id];
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("application/x-lumatrix-mesh-ids", JSON.stringify(ids));
+      e.dataTransfer.setData("text/plain", JSON.stringify(ids));
+    } catch (err) {
+      void err;
     }
+  };
+
+  const handleDragOver = (e) => {
+    if (!isGroup) return;
+    e.preventDefault();
+    try { e.dataTransfer.dropEffect = "move"; } catch { void 0; }
+  };
+
+  const handleDrop = (e) => {
+    if (!isGroup) return;
+    e.preventDefault();
+    try {
+      const raw = e.dataTransfer.getData("application/x-lumatrix-mesh-ids") || e.dataTransfer.getData("text/plain");
+      const ids = JSON.parse(raw || "[]");
+      const list = Array.isArray(ids) ? ids.filter((x) => x && x !== node.id) : [];
+      if (!list.length) return;
+      if (typeof onMoveToGroup === "function") onMoveToGroup(list, node.id);
+    } catch (err) {
+      void err;
+    }
+  };
+
+  const handleClick = (e) => {
+    // Selection state is owned by the parent (App).
+    // TreeItem should only report intent; App decides single vs multi selection.
+    if (typeof onSelect === "function") onSelect(node.id, e);
   };
 
   return (
@@ -69,6 +97,16 @@ function TreeItem({ node, level = 0, onSelect, selectedId, onDelete, expandedIds
         role="button"
         tabIndex={0}
         onClick={handleClick}
+        draggable
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+        onContextMenu={(e) => {
+          if (typeof onContextMenu === "function") {
+            e.preventDefault();
+            onContextMenu(node.id, e);
+          }
+        }}
         onKeyDown={(e) => { if (e.key === "Enter") handleClick(e); }}
         aria-pressed={isSelected}
         style={{
@@ -81,7 +119,6 @@ function TreeItem({ node, level = 0, onSelect, selectedId, onDelete, expandedIds
           alignItems: "center",
           gap: 4,
           borderRadius: 8,
-          cursor: "pointer",
           background:
             isSelected
               ? "linear-gradient(90deg, rgba(80,120,255,0.14), rgba(80,120,255,0.04))"
@@ -175,10 +212,11 @@ function TreeItem({ node, level = 0, onSelect, selectedId, onDelete, expandedIds
               onSelect={onSelect}
               selectedId={selectedId}
               onDelete={onDelete}
+              onContextMenu={onContextMenu}
               expandedIds={expandedIds}
               toggleExpand={toggleExpand}
               selectedIdsSet={selectedIdsSet}
-              onSelectionChange={onSelectionChange}
+              onMoveToGroup={onMoveToGroup}
             />
           ))}
         </div>
@@ -187,7 +225,7 @@ function TreeItem({ node, level = 0, onSelect, selectedId, onDelete, expandedIds
   );
 }
 
-export default function MeshList({ meshes = [], onSelect, selectedId, onDelete, selectedIds = new Set(), onSelectionChange = () => {} }) {
+export default function MeshList({ meshes = [], onSelect, selectedId, onDelete, onContextMenu, selectedIds = new Set(), onMoveToGroup, t = (s) => s }) {
   const tree = useMemo(() => buildTree(meshes), [meshes]);
   const [expandedIds, setExpandedIds] = useState(new Set());
 
@@ -211,7 +249,7 @@ export default function MeshList({ meshes = [], onSelect, selectedId, onDelete, 
   return (
     <div className="mesh-tree">
       {tree.length === 0 ? (
-        <div style={{ color: "var(--muted)", padding: 12, textAlign: "center" }}>No meshes</div>
+        <div style={{ color: "var(--muted)", padding: 12, textAlign: "center" }}>{t("empty.noMeshes")}</div>
       ) : (
         tree.map(node => (
           <TreeItem
@@ -221,10 +259,11 @@ export default function MeshList({ meshes = [], onSelect, selectedId, onDelete, 
             onSelect={onSelect}
             selectedId={selectedId}
             onDelete={onDelete}
+            onContextMenu={onContextMenu}
             expandedIds={expandedIds}
             toggleExpand={toggleExpand}
             selectedIdsSet={selectedIds}
-            onSelectionChange={onSelectionChange}
+            onMoveToGroup={onMoveToGroup}
           />
         ))
       )}
