@@ -19,6 +19,7 @@ export function createMeta(kind, opts = {}) {
     name: opts.name,
     params: opts.params,
     parent: opts.parent,
+    visible: opts.visible,
     position: opts.position,
     rotation: opts.rotation,
     scaling: opts.scaling,

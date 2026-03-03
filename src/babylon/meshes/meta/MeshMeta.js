@@ -7,6 +7,7 @@ export class MeshMeta {
     kind,
     params = {},
     parent = null,
+    visible = true,
     position = { x: 0, y: 0, z: 0 },
     rotation = { x: 0, y: 0, z: 0 },
     scaling = { x: 1, y: 1, z: 1 },
@@ -18,6 +19,7 @@ export class MeshMeta {
     this.kind = kind; // 'box' | 'sphere' | ...
     this.params = params;
     this.parent = parent; // parent mesh id or null
+    this.visible = visible !== false;
     this.position = { ...position };
     this.rotation = { ...rotation };
     this.scaling = { ...scaling };

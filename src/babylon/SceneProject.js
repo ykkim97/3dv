@@ -99,6 +99,13 @@ export default class SceneProject {
       }
     } catch (err) { void err; }
 
+    // Register host-call handler for this scene (RPC from Worker).
+    try {
+      if (this._scriptEngine && typeof this._scriptEngine.registerHost === 'function') {
+        this._scriptEngine.registerHost(this.id, ({ name, args }) => this._handleScriptHostCall(name, args));
+      }
+    } catch (err) { void err; }
+
     // fire onLoad for meshes that have it
     try {
       if (this._scriptEngine) {
@@ -111,6 +118,356 @@ export default class SceneProject {
         }
       }
     } catch (err) { void err; }
+  }
+
+  _resolveTargetId(target) {
+    try {
+      if (!target) return null;
+      if (typeof target === 'string') {
+        if (this.meshMetaMap.has(target)) return target;
+        for (const m of this.meshMetaMap.values()) {
+          if (m && m.name === target) return m.id;
+        }
+        return null;
+      }
+      if (typeof target === 'object') {
+        if (typeof target.id === 'string') return this._resolveTargetId(target.id);
+        if (typeof target.name === 'string') return this._resolveTargetId(target.name);
+      }
+      return null;
+    } catch (err) {
+      void err;
+      return null;
+    }
+  }
+
+  _pickPointAt(x, y) {
+    try {
+      if (!this.scene) return null;
+      const pick = this.scene.pick(
+        Number(x || 0),
+        Number(y || 0),
+        (m) => {
+          if (!m) return false;
+          if (this._gridMesh && m === this._gridMesh) return false;
+          return m.isPickable !== false;
+        }
+      );
+      if (pick && pick.hit && pick.pickedPoint) {
+        return { x: pick.pickedPoint.x, y: pick.pickedPoint.y, z: pick.pickedPoint.z };
+      }
+      return null;
+    } catch (err) {
+      void err;
+      return null;
+    }
+  }
+
+  _applyViewPreset(view) {
+    try {
+      if (!this.camera) return false;
+      const v = String(view || '').toLowerCase();
+      // ArcRotateCamera: alpha (around Y), beta (from Y down), radius.
+      const presets = {
+        iso: { alpha: Math.PI / 4, beta: Math.PI / 3 },
+        front: { alpha: Math.PI / 2, beta: Math.PI / 2.3 },
+        back: { alpha: -Math.PI / 2, beta: Math.PI / 2.3 },
+        left: { alpha: Math.PI, beta: Math.PI / 2.3 },
+        right: { alpha: 0, beta: Math.PI / 2.3 },
+        top: { alpha: Math.PI / 2, beta: 0.15 },
+        bottom: { alpha: Math.PI / 2, beta: Math.PI - 0.15 },
+      };
+      const p = presets[v] || presets.iso;
+      this.camera.alpha = p.alpha;
+      this.camera.beta = p.beta;
+      return true;
+    } catch (err) {
+      void err;
+      return false;
+    }
+  }
+
+  // Effect system (minimal) for script convenience APIs
+  _ensureEffects() {
+    if (!this._effects) this._effects = new Map();
+    if (!this._effectSeq) this._effectSeq = 0;
+    if (!this._lastEffectTime) this._lastEffectTime = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+  }
+
+  _tickEffects() {
+    try {
+      this._ensureEffects();
+      const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+      const dtMs = Math.max(0, now - this._lastEffectTime);
+      this._lastEffectTime = now;
+      const dt = dtMs / 1000;
+      if (!dt) return;
+
+      for (const eff of Array.from(this._effects.values())) {
+        try {
+          if (!eff || !eff.type) continue;
+          const done = this._tickEffectOne(eff, dt, now);
+          if (done) this._effects.delete(eff.id);
+        } catch (err) {
+          void err;
+          try { this._effects.delete(eff.id); } catch { void 0; }
+        }
+      }
+    } catch (err) {
+      void err;
+    }
+  }
+
+  _getRuntimeMaterialFor(id) {
+    try {
+      const mesh = this.meshMap.get(id);
+      const mat = mesh ? mesh.material : null;
+      return mat || null;
+    } catch {
+      return null;
+    }
+  }
+
+  _setRuntimeColor(id, color, useEmissive = false) {
+    try {
+      const mat = this._getRuntimeMaterialFor(id);
+      if (!mat) return false;
+      const c = color && typeof color === 'object' ? color : {};
+      const r = Number(c.r || 0);
+      const g = Number(c.g || 0);
+      const b = Number(c.b || 0);
+      if (mat instanceof PBRMaterial) {
+        // prefer albedoColor
+        try { mat.albedoColor = new Color3(r, g, b); } catch { void 0; }
+        if (useEmissive) {
+          try { mat.emissiveColor = new Color3(r, g, b); } catch { void 0; }
+        }
+        return true;
+      }
+      // StandardMaterial or others
+      if (useEmissive) {
+        try { mat.emissiveColor = new Color3(r, g, b); } catch { void 0; }
+      } else {
+        try { mat.diffuseColor = new Color3(r, g, b); } catch { void 0; }
+      }
+      return true;
+    } catch (err) {
+      void err;
+      return false;
+    }
+  }
+
+  _tickEffectOne(eff, dt, now) {
+    const id = eff.targetId;
+    const mesh = this.meshMap.get(id);
+    const meta = this.meshMetaMap.get(id);
+    if (!id || !mesh || !meta) return true;
+
+    if (eff.type === 'flashColor') {
+      const duration = Math.max(0, Number(eff.opts?.duration || 0));
+      if (!eff._inited) {
+        eff._inited = true;
+        eff._t = 0;
+        eff._orig = { color: { ...(meta.material?.color || { r: 0.9, g: 0.9, b: 0.9 }) }, alpha: meta.material?.alpha };
+        this._setRuntimeColor(id, eff.opts?.color || { r: 1, g: 1, b: 1 }, false);
+      }
+      eff._t += dt * 1000;
+      if (eff._t >= duration) {
+        this._setRuntimeColor(id, eff._orig?.color || { r: 0.9, g: 0.9, b: 0.9 }, false);
+        return true;
+      }
+      return false;
+    }
+
+    if (eff.type === 'fadeMaterial') {
+      const duration = Math.max(1, Number(eff.opts?.duration || 1));
+      const toAlpha = Math.max(0, Math.min(1, Number(eff.opts?.toAlpha)));
+      const mat = this._getRuntimeMaterialFor(id);
+      if (!mat) return true;
+      if (!eff._inited) {
+        eff._inited = true;
+        eff._t = 0;
+        eff._from = Number(mat.alpha ?? 1);
+      }
+      eff._t += dt * 1000;
+      const a = Math.max(0, Math.min(1, eff._t / duration));
+      const next = eff._from + (toAlpha - eff._from) * a;
+      try { mat.alpha = next; } catch { void 0; }
+      // keep meta in sync (best-effort)
+      try { meta.material = { ...(meta.material || {}), alpha: next }; } catch { void 0; }
+      if (a >= 1) return true;
+      return false;
+    }
+
+    if (eff.type === 'moveTo') {
+      const dest = eff.opts?.dest;
+      const dx = Number(dest?.x || 0);
+      const dy = Number(dest?.y || 0);
+      const dz = Number(dest?.z || 0);
+
+      if (!eff._inited) {
+        eff._inited = true;
+        eff._t = 0;
+        eff._from = { x: mesh.position.x, y: mesh.position.y, z: mesh.position.z };
+        const speed = Number(eff.opts?.speed || 0);
+        const duration = Number(eff.opts?.duration || 0);
+        if (duration > 0) eff._duration = duration;
+        else if (speed > 0) {
+          const dist = Math.sqrt((dx - eff._from.x) ** 2 + (dy - eff._from.y) ** 2 + (dz - eff._from.z) ** 2);
+          eff._duration = Math.max(1, (dist / speed) * 1000);
+        } else {
+          eff._duration = 300;
+        }
+      }
+
+      eff._t += dt * 1000;
+      const a = Math.max(0, Math.min(1, eff._t / eff._duration));
+      const nx = eff._from.x + (dx - eff._from.x) * a;
+      const ny = eff._from.y + (dy - eff._from.y) * a;
+      const nz = eff._from.z + (dz - eff._from.z) * a;
+      try { mesh.position.copyFromFloats(nx, ny, nz); } catch { void 0; }
+      try { Object.assign(meta.position, { x: nx, y: ny, z: nz }); } catch { void 0; }
+      if (a >= 1) return true;
+      return false;
+    }
+
+    if (eff.type === 'rotate') {
+      // opts: { spin: { axis: {x,y,z}, speedDeg } }
+      const spin = eff.opts?.spin;
+      if (!spin) return true;
+      const speedDeg = Number(spin.speedDeg || 0);
+      const axis = spin.axis && typeof spin.axis === 'object' ? spin.axis : { x: 0, y: 1, z: 0 };
+      const radPerSec = (speedDeg * Math.PI) / 180;
+      const inc = radPerSec * dt;
+      try {
+        // simple axis mapping (dominant component)
+        if (Math.abs(axis.x) >= Math.abs(axis.y) && Math.abs(axis.x) >= Math.abs(axis.z)) mesh.rotation.x += inc;
+        else if (Math.abs(axis.z) >= Math.abs(axis.y)) mesh.rotation.z += inc;
+        else mesh.rotation.y += inc;
+      } catch { void 0; }
+      try { Object.assign(meta.rotation, { x: mesh.rotation.x, y: mesh.rotation.y, z: mesh.rotation.z }); } catch { void 0; }
+      return false;
+    }
+
+    if (eff.type === 'pulseColor') {
+      const amp = Number(eff.opts?.amp ?? 0.25);
+      const freq = Number(eff.opts?.freq ?? 1.5);
+      const useEmissive = !!eff.opts?.useEmissive;
+      const base = eff.opts?.color && typeof eff.opts.color === 'object'
+        ? eff.opts.color
+        : (meta.material?.color || { r: 0.9, g: 0.9, b: 0.9 });
+      if (!eff._inited) {
+        eff._inited = true;
+        eff._phase = 0;
+      }
+      eff._phase += dt * Math.PI * 2 * freq;
+      const s = Math.sin(eff._phase);
+      const scale = 1 + s * amp;
+      const c = { r: base.r * scale, g: base.g * scale, b: base.b * scale };
+      this._setRuntimeColor(id, c, useEmissive);
+      return false;
+    }
+
+    // unknown effect types auto-finish (keeps future expansion safe)
+    return true;
+  }
+
+  _startEffect({ type, targetId, opts }) {
+    this._ensureEffects();
+    const id = `eff-${++this._effectSeq}-${Date.now()}`;
+    this._effects.set(id, { id, type, targetId, opts: opts || {}, _createdAt: Date.now() });
+    return id;
+  }
+
+  _stopEffect(id) {
+    this._ensureEffects();
+    if (!id) return false;
+    return this._effects.delete(id);
+  }
+
+  _stopEffectsForTarget(targetId, types = null) {
+    this._ensureEffects();
+    const want = Array.isArray(types) ? new Set(types) : null;
+    for (const eff of Array.from(this._effects.values())) {
+      if (!eff) continue;
+      if (eff.targetId !== targetId) continue;
+      if (want && !want.has(eff.type)) continue;
+      this._effects.delete(eff.id);
+    }
+  }
+
+  _handleScriptHostCall(name, args) {
+    const n = String(name || '');
+    if (n === 'pickScreen') return this._pickPointAt(args?.x, args?.y);
+    if (n === 'pickAtPointer') return this._pickPointAt(this.scene?.pointerX, this.scene?.pointerY);
+    if (n === 'setView') return this._applyViewPreset(args?.view);
+    if (n === 'focus') {
+      const tid = this._resolveTargetId(args?.target);
+      if (!tid) return false;
+      const ok = this.frameMesh(tid);
+      try {
+        const r = Number(args?.opts?.radius || 0);
+        if (ok && this.camera && r > 0) this.camera.radius = r;
+      } catch { void 0; }
+      return ok;
+    }
+    if (n === 'startEffect') {
+      const tid = this._resolveTargetId(args?.targetId);
+      if (!tid) return null;
+      return this._startEffect({ type: args?.type, targetId: tid, opts: args?.opts || {} });
+    }
+    if (n === 'stopEffect') return this._stopEffect(args?.id);
+    if (n === 'stopEffectsForTarget') {
+      const tid = this._resolveTargetId(args?.targetId);
+      if (!tid) return false;
+      this._stopEffectsForTarget(tid, args?.types || null);
+      return true;
+    }
+    if (n === 'stopAllEffectsByType') {
+      const type = String(args?.type || '');
+      this._ensureEffects();
+      for (const eff of Array.from(this._effects.values())) {
+        if (eff && eff.type === type) this._effects.delete(eff.id);
+      }
+      return true;
+    }
+    if (n === 'delay') {
+      const ms = Math.max(0, Number(args?.ms || 0));
+      const fnOrName = args?.fnOrName;
+      const meshId = this._resolveTargetId(args?.meshId) || (typeof args?.meshId === 'string' ? args.meshId : null);
+      const id = `delay-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      if (!this._delays) this._delays = new Map();
+      const t = setTimeout(() => {
+        try {
+          this._delays.delete(id);
+        } catch { void 0; }
+        // For now, only supports firing a named event on the same mesh: Util.Delay(ms, 'onClick')
+        try {
+          if (typeof fnOrName === 'string' && meshId) this._runMeshScriptEvent(meshId, fnOrName, { source: 'delay' });
+        } catch { void 0; }
+      }, ms);
+      this._delays.set(id, t);
+      return id;
+    }
+    if (n === 'cancelDelay') {
+      const id = args?.id;
+      if (!id || !this._delays) return false;
+      const t = this._delays.get(id);
+      if (!t) return false;
+      try { clearTimeout(t); } catch { void 0; }
+      this._delays.delete(id);
+      return true;
+    }
+
+    // Optional future host services (sound/markers). Keep as safe no-ops for now.
+    if (n === 'playSound' || n === 'stopSound' || n === 'fadeSound') {
+      return false;
+    }
+    if (n === 'showMarker' || n === 'removeMarker') {
+      return null;
+    }
+
+    throw new Error(`Unknown hostCall: ${n}`);
   }
 
   setRuntimeEnabled(enabled) {
@@ -624,6 +981,7 @@ export default class SceneProject {
     this._running = true;
     this.engine.runRenderLoop(() => {
       this._processCommands();
+      try { this._tickEffects(); } catch (err) { void err; }
       // ensure rotation matching disabled to avoid Babylon warning when non-uniform scaled
       try {
         if (this._gizmoManager) {
@@ -790,6 +1148,7 @@ export default class SceneProject {
       const meta = this.meshMetaMap.get(id);
       if (!meta) return;
       if (changes.name !== undefined) meta.name = changes.name;
+      if (changes.visible !== undefined) meta.visible = changes.visible !== false;
       if (changes.position) Object.assign(meta.position, this._snapPosition(changes.position));
       if (changes.rotation) Object.assign(meta.rotation, changes.rotation);
       if (changes.scaling) Object.assign(meta.scaling, changes.scaling);
@@ -803,6 +1162,10 @@ export default class SceneProject {
       if (this.scene) {
         const mesh = this.meshMap.get(id);
         if (mesh) {
+          if (changes.visible !== undefined) {
+            try { mesh.setEnabled(meta.visible !== false); } catch (err) { void err; }
+            try { mesh.isVisible = meta.visible !== false; } catch (err) { void err; }
+          }
           if (changes.position) mesh.position.copyFromFloats(meta.position.x, meta.position.y, meta.position.z);
           if (changes.rotation) {
             if (mesh.rotation && typeof mesh.rotation.copyFromFloats === "function") {
@@ -1066,6 +1429,7 @@ export default class SceneProject {
       try { mesh.isPickable = false; } catch { void 0; }
       try { mesh.visibility = 0; } catch { void 0; }
       try { mesh.alwaysSelectAsActiveMesh = false; } catch { void 0; }
+      try { mesh.setEnabled(meta.visible !== false); } catch { void 0; }
 
       if (meta.parent) {
         const pm = this.meshMap.get(meta.parent);
@@ -1134,6 +1498,9 @@ export default class SceneProject {
         try { mesh.parent = pm; } catch { void 0; }
       }
     }
+
+    try { mesh.setEnabled(meta.visible !== false); } catch { void 0; }
+    try { mesh.isVisible = meta.visible !== false; } catch { void 0; }
 
     this.meshMap.set(meta.id, mesh);
     this._applyMaterialToMesh(meta);
@@ -1602,6 +1969,7 @@ export default class SceneProject {
       }
       meshes.push({
         id: m.id, name: m.name, kind: m.kind, params: m.params, parent: m.parent,
+        visible: m.visible !== false,
         position, rotation, scaling,
         material: { ...m.material },
         scripts: m.scripts ? JSON.parse(JSON.stringify(m.scripts)) : null

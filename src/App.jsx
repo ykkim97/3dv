@@ -72,6 +72,10 @@ export default function App() {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [, forceRerender] = useState(0);
 
+  // Multi-select helpers
+  const selectionAnchorIdRef = useRef(null);
+  const meshListRef = useRef([]);
+
   // Undo / Redo stacks (store simple records)
   const undoStack = useRef([]);
   const redoStack = useRef([]);
@@ -140,10 +144,14 @@ export default function App() {
       });
 
       // register selection callback (scene -> app)
-      sp.setSelectionCallback((id) => {
+      sp.setSelectionCallback((id, info) => {
         setSelectedMeshId(id);
-        // keep selectedIds in sync: if single select done in scene, set that as single selection
-        setSelectedIds(new Set(id ? [id] : []));
+        // Only collapse to single selection when the user picked in the viewport.
+        // App-driven highlight (source='api') must not destroy an existing multi-selection.
+        if (info && info.source === 'pick') {
+          setSelectedIds(new Set(id ? [id] : []));
+          selectionAnchorIdRef.current = id || null;
+        }
         forceRerender((n) => n + 1);
       });
 
@@ -414,23 +422,68 @@ export default function App() {
     setTimeout(() => forceRerender((n) => n + 1), 40);
   };
 
-    const onMeshSelect = (id, ev) => {
-      setSelectedMeshId(id);
-      if (ev && (ev.ctrlKey || ev.metaKey)) {
-        // toggle in selectedIds
+  const _buildPreorderIds = (meshes = []) => {
+    const map = new Map();
+    for (const m of meshes) map.set(m.id, { ...m, children: [] });
+    const roots = [];
+    for (const node of map.values()) {
+      if (node.parent && map.has(node.parent)) map.get(node.parent).children.push(node);
+      else roots.push(node);
+    }
+    const out = [];
+    const visit = (n) => {
+      out.push(n.id);
+      if (n.children && n.children.length) {
+        for (const c of n.children) visit(c);
+      }
+    };
+    for (const r of roots) visit(r);
+    return out;
+  };
+
+  const onMeshSelect = (id, ev) => {
+    if (!id) return;
+
+    const wantToggle = !!(ev && (ev.ctrlKey || ev.metaKey));
+    const wantRange = !!(ev && ev.shiftKey);
+
+    setSelectedMeshId(id);
+
+    if (wantRange) {
+      const anchor = selectionAnchorIdRef.current;
+      const order = _buildPreorderIds(meshListRef.current || []);
+      const aIdx = anchor ? order.indexOf(anchor) : -1;
+      const bIdx = order.indexOf(id);
+      if (aIdx >= 0 && bIdx >= 0) {
+        const lo = Math.min(aIdx, bIdx);
+        const hi = Math.max(aIdx, bIdx);
+        const slice = order.slice(lo, hi + 1);
         setSelectedIds(prev => {
-          const next = new Set(prev);
-          if (next.has(id)) next.delete(id);
-          else next.add(id);
-          return next;
+          const base = wantToggle ? new Set(prev) : new Set();
+          for (const sid of slice) base.add(sid);
+          return base;
         });
       } else {
-        setSelectedIds(new Set(id ? [id] : []));
+        // no valid anchor/order: fallback to single selection
+        setSelectedIds(new Set([id]));
       }
-      const inst = getCurrentInstance();
-      if (inst) inst.highlightMesh(id);
-      forceRerender((n) => n + 1);
-    };
+    } else if (wantToggle) {
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        return next;
+      });
+      selectionAnchorIdRef.current = id;
+    } else {
+      setSelectedIds(new Set([id]));
+      selectionAnchorIdRef.current = id;
+    }
+
+    const inst = getCurrentInstance();
+    if (inst) inst.highlightMesh(id);
+    forceRerender((n) => n + 1);
+  };
 
   const openMeshContextMenu = (meshId, ev) => {
     try {
@@ -640,6 +693,7 @@ export default function App() {
   const currentScene = scenes.find((s) => s.id === currentSceneId);
   const currentInstance = sceneInstances.get(currentSceneId);
   const meshList = currentInstance ? currentInstance.getMeshMetaList() : currentScene?.json?.meshes || [];
+  meshListRef.current = meshList || [];
   const selectedMeshMeta = meshList ? meshList.find((m) => m.id === selectedMeshId) : null;
   const scriptEditorMeshMeta = meshList ? meshList.find((m) => m.id === scriptEditorMeshId) : null;
   const meshPropsMeta = meshList ? meshList.find((m) => m.id === meshPropsId) : null;

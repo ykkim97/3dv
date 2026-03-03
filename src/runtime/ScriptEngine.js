@@ -11,6 +11,9 @@ export default class ScriptEngine {
     this._pending = new Map();
     this._scriptsById = {};
     this._data = null;
+
+    // Host-call (RPC) handlers keyed by sceneId
+    this._hosts = new Map();
     this._ensureWorker();
   }
 
@@ -24,12 +27,19 @@ export default class ScriptEngine {
 
   setScripts(meshMetas = []) {
     const scriptsById = {};
+    const meshMetasById = {};
+    const meshIdsByName = {};
     for (const m of Array.isArray(meshMetas) ? meshMetas : []) {
       if (!m || !m.id) continue;
+      meshMetasById[m.id] = m;
+      if (m.name && typeof m.name === 'string') {
+        // last-write-wins on name collisions
+        meshIdsByName[m.name] = m.id;
+      }
       if (m.scripts && typeof m.scripts === 'object') scriptsById[m.id] = m.scripts;
     }
     this._scriptsById = scriptsById;
-    this._post({ type: 'setScripts', scriptsById });
+    this._post({ type: 'setScripts', scriptsById, meshMetasById, meshIdsByName });
   }
 
   setData(data) {
@@ -87,11 +97,44 @@ export default class ScriptEngine {
         if (msg.ok) pending.resolve(msg.commands || []);
         else pending.reject(Object.assign(new Error(msg.error?.message || 'Script error'), { stack: msg.error?.stack }));
       }
+
+      if (msg.type === 'hostCall') {
+        // Worker requests a host-provided operation (pick, camera, effects, etc)
+        const { callId, sceneId, name, args } = msg;
+        const handler = sceneId ? this._hosts.get(sceneId) : null;
+
+        const finish = (ok, result, error) => {
+          try {
+            this._worker.postMessage({ type: 'hostCallResult', callId, ok, result, error: error ? { message: error.message || String(error), stack: error.stack } : null });
+          } catch { /* ignore */ }
+        };
+
+        if (!handler || typeof handler !== 'function') {
+          finish(false, null, new Error(`No host handler registered for scene ${sceneId || '(none)'}`));
+          return;
+        }
+
+        Promise.resolve()
+          .then(() => handler({ name, args }))
+          .then((res) => finish(true, res, null))
+          .catch((err) => finish(false, null, err));
+      }
     };
 
     // prime with latest state
     try { this._post({ type: 'setScripts', scriptsById: this._scriptsById || {} }); } catch { /* ignore */ }
     try { this._post({ type: 'setData', data: this._data }); } catch { /* ignore */ }
+  }
+
+  registerHost(sceneId, handler) {
+    if (!sceneId) return;
+    if (typeof handler !== 'function') return;
+    this._hosts.set(sceneId, handler);
+  }
+
+  unregisterHost(sceneId) {
+    if (!sceneId) return;
+    this._hosts.delete(sceneId);
   }
 
   _restartWorker() {
