@@ -3,6 +3,7 @@ import { ArcRotateCamera } from "@babylonjs/core/Cameras/arcRotateCamera";
 import { Engine } from "@babylonjs/core/Engines/engine";
 import { PointerEventTypes } from "@babylonjs/core/Events/pointerEvents";
 import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
+import { DirectionalLight } from "@babylonjs/core/Lights/directionalLight";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { DynamicTexture } from "@babylonjs/core/Materials/Textures/dynamicTexture";
 import { Color3, Color4 } from "@babylonjs/core/Maths/math.color";
@@ -27,6 +28,7 @@ export default class SceneProject {
     this.meshMetaMap = new Map();
     this.meshMap = new Map();
     this.materialMap = new Map();
+    this._lights = new Map();
 
     this.commandQueue = [];
     this._running = false;
@@ -52,6 +54,8 @@ export default class SceneProject {
     // 축
     this._axesHelper = null;
     this._axesVisible = true; // 기본 on; App에서 툴 상태로 제어
+
+    this._hemisphericLight = null;
 
     if (initialJSON) {
       this._loadMetaFromJSON(initialJSON);
@@ -82,24 +86,24 @@ export default class SceneProject {
       const makeFiltered = (orig) => (...args) => {
         try {
           if (args && args.length && typeof args[0] === "string" && args[0].includes(filterMsg)) return;
-        } catch (e) {}
-        try { orig.apply(console, args); } catch (e) {}
+        } catch (err) { void err; }
+        try { orig.apply(console, args); } catch (err) { void err; }
       };
       console.warn = makeFiltered(this._originalConsoleWarn);
       console.log = makeFiltered(this._originalConsoleLog);
       console.error = makeFiltered(this._originalConsoleError);
-    } catch (e) {}
+    } catch (err) { void err; }
     // match scene background to the (dark) grid main color for seamless look
-    try { this.scene.clearColor = new Color4(0.03, 0.03, 0.04, 1); } catch (e) {}
+    try { this.scene.clearColor = new Color4(0.03, 0.03, 0.04, 1); } catch (err) { void err; }
 
     this.camera = new ArcRotateCamera("camera-" + this.id, Math.PI / 4, Math.PI / 3, 50, Vector3.Zero(), this.scene);
     this.camera.attachControl(this.canvas, true);
 
     // apply keyboard control state if needed
-    try { if (!this._cameraKeyboardEnabled) this.setCameraKeyboardEnabled(false); } catch (e) {}
+    try { if (!this._cameraKeyboardEnabled) this.setCameraKeyboardEnabled(false); } catch (err) { void err; }
 
-    const hemi = new HemisphericLight("light-" + this.id, new Vector3(0, 1, 0), this.scene);
-    hemi.intensity = 0.95;
+    this._hemisphericLight = new HemisphericLight("hemi-" + this.id, new Vector3(0, 1, 0), this.scene);
+    this._hemisphericLight.intensity = 0.95;
 
     // Selection highlighting now uses mesh outline/edges rendering (Blender-like)
 
@@ -112,7 +116,7 @@ export default class SceneProject {
     if (this._gridVisible) this._createGrid();
     // only create axes if requested
     if (this._axesVisible) {
-      try { this._axesHelper = new AxesHelper(this.scene, this._gridSize); } catch (e) { this._axesHelper = null; }
+      try { this._axesHelper = new AxesHelper(this.scene, this._gridSize); } catch (err) { void err; this._axesHelper = null; }
     }
 
     // pointer pick handling
@@ -151,8 +155,8 @@ export default class SceneProject {
           if (pi.type === PointerEventTypes.POINTERDOWN) {
             try {
               // disable rotation matching immediately
-              try { this._gizmoManager.updateGizmoRotationToMatchAttachedMesh = false; } catch {}
-              try { if (this._gizmoManager.rotationGizmo) this._gizmoManager.rotationGizmo.updateGizmoRotationToMatchAttachedMesh = false; } catch {}
+              try { this._gizmoManager.updateGizmoRotationToMatchAttachedMesh = false; } catch (err) { void err; }
+              try { if (this._gizmoManager.rotationGizmo) this._gizmoManager.rotationGizmo.updateGizmoRotationToMatchAttachedMesh = false; } catch (err) { void err; }
               // if non-uniform, store and set uniform now
               const sx = attached.scaling?.x || 1;
               const sy = attached.scaling?.y || 1;
@@ -164,7 +168,7 @@ export default class SceneProject {
                 const avg = (sx + sy + sz) / 3;
                 try { attached.scaling.copyFromFloats(avg, avg, avg); } catch { attached.scaling = new Vector3(avg, avg, avg); }
               }
-            } catch (e) {}
+            } catch (err) { void err; }
           }
           if (pi.type === PointerEventTypes.POINTERUP) {
             try {
@@ -174,22 +178,22 @@ export default class SceneProject {
                 this._tempScalingGlobal.delete(attached.id);
               }
               // keep updateGizmoRotation disabled to be safe
-              try { this._gizmoManager.updateGizmoRotationToMatchAttachedMesh = false; } catch {}
-              try { if (this._gizmoManager.rotationGizmo) this._gizmoManager.rotationGizmo.updateGizmoRotationToMatchAttachedMesh = false; } catch {}
-            } catch (e) {}
+              try { this._gizmoManager.updateGizmoRotationToMatchAttachedMesh = false; } catch (err) { void err; }
+              try { if (this._gizmoManager.rotationGizmo) this._gizmoManager.rotationGizmo.updateGizmoRotationToMatchAttachedMesh = false; } catch (err) { void err; }
+            } catch (err) { void err; }
           }
-        } catch (e) {}
+        } catch (err) { void err; }
       };
       this.scene.onPointerObservable.add(this._pointerGizmoHandler);
-    } catch (e) {}
+    } catch (err) { void err; }
 
     // initialize gizmo manager for transform controls
     try {
       this._gizmoManager = new GizmoManager(this.scene);
       // reduce default gizmo size so transforms appear appropriately scaled for small meshes
-      try { this._gizmoManager.scaleRatio = 0.6; } catch {}
+      try { this._gizmoManager.scaleRatio = 0.6; } catch (err) { void err; }
       // avoid rotation gizmo errors when mesh has non-uniform scaling
-      try { this._gizmoManager.updateGizmoRotationToMatchAttachedMesh = false; } catch {}
+      try { this._gizmoManager.updateGizmoRotationToMatchAttachedMesh = false; } catch (err) { void err; }
       this._gizmoManager.positionGizmoEnabled = true;
       this._gizmoManager.rotationGizmoEnabled = true;
       this._gizmoManager.scaleGizmoEnabled = true;
@@ -207,14 +211,14 @@ export default class SceneProject {
               if (attachedRuntime.position) meta.position = { x: attachedRuntime.position.x, y: attachedRuntime.position.y, z: attachedRuntime.position.z };
               if (attachedRuntime.rotation) meta.rotation = { x: attachedRuntime.rotation.x, y: attachedRuntime.rotation.y, z: attachedRuntime.rotation.z };
               if (attachedRuntime.scaling) meta.scaling = { x: attachedRuntime.scaling.x, y: attachedRuntime.scaling.y, z: attachedRuntime.scaling.z };
-            } catch (e) {}
+            } catch (err) { void err; }
             // notify app (UI) about the live change via changeCallback (preferred)
             if (typeof this._changeCallback === "function") {
-              try { this._changeCallback(id); } catch (e) {}
+              try { this._changeCallback(id); } catch (err) { void err; }
             } else if (typeof this.onSelect === "function") {
-              try { this.onSelect(id); } catch (e) {}
+              try { this.onSelect(id); } catch (err) { void err; }
             }
-          } catch (e) {}
+          } catch (err) { void err; }
         };
 
         // helpers to temporarily normalize scaling during rotation drags
@@ -235,9 +239,9 @@ export default class SceneProject {
                   const avg = (sx + sy + sz) / 3;
                   try { attachedRuntime.scaling.copyFromFloats(avg, avg, avg); } catch { attachedRuntime.scaling = new Vector3(avg, avg, avg); }
                 }
-              } catch (e) {}
+              } catch (err) { void err; }
             }
-          } catch (e) {}
+          } catch (err) { void err; }
         };
         const onDragEnd = (gzType) => {
           try {
@@ -250,7 +254,7 @@ export default class SceneProject {
                 _tempScaling.delete(attachedRuntime.id);
               }
             }
-          } catch (e) {}
+          } catch (err) { void err; }
         };
 
         // position gizmo
@@ -268,7 +272,7 @@ export default class SceneProject {
           } else if (this._gizmoManager.positionGizmo && this._gizmoManager.positionGizmo.onDragObservable) {
             this._gizmoManager.positionGizmo.onDragObservable.add(applyGizmoToMeta);
           }
-        } catch (e) {}
+        } catch (err) { void err; }
 
         // rotation gizmo
         try {
@@ -277,7 +281,7 @@ export default class SceneProject {
             if (this._gizmoManager.rotationGizmo.onDragStartObservable) this._gizmoManager.rotationGizmo.onDragStartObservable.add(() => onDragStart('rotation'));
             if (this._gizmoManager.rotationGizmo.onDragEndObservable) this._gizmoManager.rotationGizmo.onDragEndObservable.add(() => onDragEnd('rotation'));
           }
-        } catch (e) {}
+        } catch (err) { void err; }
 
         // scale gizmo
         try {
@@ -286,9 +290,9 @@ export default class SceneProject {
             if (this._gizmoManager.scaleGizmo.onDragStartObservable) this._gizmoManager.scaleGizmo.onDragStartObservable.add(() => onDragStart('scale'));
             if (this._gizmoManager.scaleGizmo.onDragEndObservable) this._gizmoManager.scaleGizmo.onDragEndObservable.add(() => onDragEnd('scale'));
           }
-        } catch (e) {}
-      } catch (e) {}
-    } catch (e) { this._gizmoManager = null; }
+        } catch (err) { void err; }
+      } catch (err) { void err; }
+    } catch (err) { void err; this._gizmoManager = null; }
 
     this._running = true;
     this.engine.runRenderLoop(() => {
@@ -296,12 +300,12 @@ export default class SceneProject {
       // ensure rotation matching disabled to avoid Babylon warning when non-uniform scaled
       try {
         if (this._gizmoManager) {
-          try { this._gizmoManager.updateGizmoRotationToMatchAttachedMesh = false; } catch {}
-          try { if (this._gizmoManager.rotationGizmo) this._gizmoManager.rotationGizmo.updateGizmoRotationToMatchAttachedMesh = false; } catch {}
+          try { this._gizmoManager.updateGizmoRotationToMatchAttachedMesh = false; } catch (err) { void err; }
+          try { if (this._gizmoManager.rotationGizmo) this._gizmoManager.rotationGizmo.updateGizmoRotationToMatchAttachedMesh = false; } catch (err) { void err; }
         }
-      } catch (e) {}
+      } catch (err) { void err; }
       // sync attached gizmo mesh transforms to meta so UI can reflect live changes
-      try { this._syncAttachedMesh(); } catch (e) {}
+      try { this._syncAttachedMesh(); } catch (err) { void err; }
       if (this.scene) this.scene.render();
     });
 
@@ -311,28 +315,28 @@ export default class SceneProject {
   _shutdownEngineOnly() {
     window.removeEventListener("resize", this._onResize);
     if (this.scene) {
-      for (const m of this.scene.meshes.slice()) { try { m.dispose(); } catch {} }
-      try { this.scene.dispose(); } catch {}
+      for (const m of this.scene.meshes.slice()) { try { m.dispose(); } catch (err) { void err; } }
+      try { this.scene.dispose(); } catch (err) { void err; }
       this.scene = null;
     }
     if (this.engine) {
-      try { this.engine.stopRenderLoop(); } catch {}
-      try { this.engine.dispose(); } catch {}
+      try { this.engine.stopRenderLoop(); } catch (err) { void err; }
+      try { this.engine.dispose(); } catch (err) { void err; }
       this.engine = null;
     }
     // Note: no HighlightLayer disposal needed (not used)
 
     // restore console methods if we patched them
-    try { if (this._originalConsoleWarn) console.warn = this._originalConsoleWarn; } catch (e) {}
-    try { if (this._originalConsoleLog) console.log = this._originalConsoleLog; } catch (e) {}
-    try { if (this._originalConsoleError) console.error = this._originalConsoleError; } catch (e) {}
+    try { if (this._originalConsoleWarn) console.warn = this._originalConsoleWarn; } catch (err) { void err; }
+    try { if (this._originalConsoleLog) console.log = this._originalConsoleLog; } catch (err) { void err; }
+    try { if (this._originalConsoleError) console.error = this._originalConsoleError; } catch (err) { void err; }
 
-    if (this._axesHelper) { try { this._axesHelper.dispose(); } catch {} ; this._axesHelper = null; }
-    if (this._gridMesh) { try { this._gridMesh.dispose(); } catch {} ; this._gridMesh = null; }
-    if (this._gridMaterial) { try { this._gridMaterial.dispose(); } catch {} ; this._gridMaterial = null; }
-    if (this._gizmoManager) { try { this._gizmoManager.attachToMesh(null); } catch {} ; this._gizmoManager = null; }
+    if (this._axesHelper) { try { this._axesHelper.dispose(); } catch (err) { void err; } this._axesHelper = null; }
+    if (this._gridMesh) { try { this._gridMesh.dispose(); } catch (err) { void err; } this._gridMesh = null; }
+    if (this._gridMaterial) { try { this._gridMaterial.dispose(); } catch (err) { void err; } this._gridMaterial = null; }
+    if (this._gizmoManager) { try { this._gizmoManager.attachToMesh(null); } catch (err) { void err; } this._gizmoManager = null; }
 
-    for (const mat of this.materialMap.values()) { try { mat.dispose(); } catch {} }
+    for (const mat of this.materialMap.values()) { try { mat.dispose(); } catch (err) { void err; } }
     this.materialMap.clear();
     this.meshMap.clear();
     this._running = false;
@@ -390,18 +394,18 @@ export default class SceneProject {
 
     if (changed()) {
       // update meta
-      try { if (pos) meta.position = pos; } catch {}
-      try { if (rot) meta.rotation = rot; } catch {}
-      try { if (scl) meta.scaling = scl; } catch {}
+      try { if (pos) meta.position = pos; } catch (err) { void err; }
+      try { if (rot) meta.rotation = rot; } catch (err) { void err; }
+      try { if (scl) meta.scaling = scl; } catch (err) { void err; }
 
       // store last
       this._lastAttachedState[id] = { pos: { ...(pos || {}) }, rot: { ...(rot || {}) }, scl: { ...(scl || {}) } };
 
       // notify app
       if (typeof this._changeCallback === "function") {
-        try { this._changeCallback(id); } catch (e) {}
+        try { this._changeCallback(id); } catch (err) { void err; }
       } else if (typeof this.onSelect === "function") {
-        try { this.onSelect(id); } catch (e) {}
+        try { this.onSelect(id); } catch (err) { void err; }
       }
     }
   }
@@ -416,7 +420,7 @@ export default class SceneProject {
   setSnapEnabled(enabled) {
     this._snapEnabled = !!enabled;
     if (this._gizmoManager && this._gizmoManager.positionGizmo) {
-      try { this._gizmoManager.positionGizmo.snapDistance = this._snapEnabled ? this._snapValue : 0; } catch {}
+      try { this._gizmoManager.positionGizmo.snapDistance = this._snapEnabled ? this._snapValue : 0; } catch (err) { void err; }
     }
   }
 
@@ -424,7 +428,7 @@ export default class SceneProject {
     const val = Math.max(0.0001, Number(v) || 1);
     this._snapValue = val;
     if (this._gizmoManager && this._gizmoManager.positionGizmo) {
-      try { this._gizmoManager.positionGizmo.snapDistance = this._snapEnabled ? this._snapValue : 0; } catch {}
+      try { this._gizmoManager.positionGizmo.snapDistance = this._snapEnabled ? this._snapValue : 0; } catch (err) { void err; }
     }
   }
 
@@ -438,7 +442,7 @@ export default class SceneProject {
       this.meshMetaMap.set(meta.id, meta);
       try {
         console.log("SceneProject: applyCommand createMesh", meta.id, "kind", meta.kind, "sceneReady", !!this.scene);
-      } catch (e) {}
+      } catch (err) { void err; }
       if (this.scene) this._createRuntimeMesh(meta);
       return;
     }
@@ -475,11 +479,11 @@ export default class SceneProject {
           if (changes.name) mesh.name = meta.name;
           if (changes.parent !== undefined) {
             const p = this.meshMap.get(meta.parent);
-            try { mesh.parent = p || null; } catch {}
+            try { mesh.parent = p || null; } catch (err) { void err; }
           }
         }
         if (changes.material) this._applyMaterialToMesh(meta);
-        try { console.log("SceneProject: applied updateMesh", id, changes); } catch (e) {}
+        try { console.log("SceneProject: applied updateMesh", id, changes); } catch (err) { void err; }
       }
       return;
     }
@@ -487,9 +491,9 @@ export default class SceneProject {
     if (type === "removeMesh") {
       const { id } = payload;
       const mesh = this.meshMap.get(id);
-      if (mesh) { try { mesh.dispose(); } catch {}; this.meshMap.delete(id); }
+      if (mesh) { try { mesh.dispose(); } catch (err) { void err; } this.meshMap.delete(id); }
       const mat = this.materialMap.get(id);
-      if (mat) { try { mat.dispose(); } catch {}; this.materialMap.delete(id); }
+      if (mat) { try { mat.dispose(); } catch (err) { void err; } this.materialMap.delete(id); }
       this.meshMetaMap.delete(id);
       if (this._selectedId === id) {
         this._selectMeshById(null);
@@ -524,7 +528,7 @@ export default class SceneProject {
           const childRuntime = this.meshMap.get(childId);
           const newParentRuntime = original[childId] ? this.meshMap.get(original[childId]) : null;
           if (childRuntime) {
-            try { childRuntime.parent = newParentRuntime || null; } catch {}
+            try { childRuntime.parent = newParentRuntime || null; } catch { void 0; }
           }
         }
       }
@@ -532,7 +536,7 @@ export default class SceneProject {
       // dispose and remove the group runtime node (TransformNode)
       const groupRuntime = this.meshMap.get(id);
       if (groupRuntime) {
-        try { groupRuntime.dispose(); } catch {}
+        try { groupRuntime.dispose(); } catch { void 0; }
         this.meshMap.delete(id);
       }
 
@@ -565,7 +569,7 @@ export default class SceneProject {
         this.camera.keysLeft = [37];
         this.camera.keysRight = [39];
       }
-    } catch (e) {}
+    } catch (e) { void e; }
   }
 
   _createRuntimeMesh(meta) {
@@ -608,7 +612,7 @@ export default class SceneProject {
     if (meta.parent) {
       const pm = this.meshMap.get(meta.parent);
       if (pm) {
-        try { mesh.parent = pm; } catch {}
+        try { mesh.parent = pm; } catch { void 0; }
       }
     }
 
@@ -629,7 +633,7 @@ export default class SceneProject {
       // For LinesMesh, Babylon exposes `color` (Color3) property.
       try {
         mesh.color = new Color3(c.r, c.g, c.b);
-      } catch {}
+      } catch { void 0; }
       return;
     }
 
@@ -661,9 +665,9 @@ export default class SceneProject {
             prevMesh.renderOutline = false;
           }
           if (typeof prevMesh.disableEdgesRendering === "function") {
-            try { prevMesh.disableEdgesRendering(); } catch {}
+            try { prevMesh.disableEdgesRendering(); } catch { void 0; }
           }
-        } catch {}
+        } catch { void 0; }
       }
     }
 
@@ -685,9 +689,9 @@ export default class SceneProject {
                 m.edgesColor = new Color4(1.0, 0.62, 0.25, 1.0);
                 m.edgesWidth = 4.0;
               }
-            } catch {}
+            } catch { void 0; }
           }
-        } catch {}
+        } catch { void 0; }
       }
     }
 
@@ -703,11 +707,11 @@ export default class SceneProject {
             const sz = attach.scaling.z || 1;
             const eps = 1e-4;
             const nonUniform = (Math.abs(sx - sy) > eps) || (Math.abs(sx - sz) > eps) || (Math.abs(sy - sz) > eps);
-            try { this._gizmoManager.updateGizmoRotationToMatchAttachedMesh = !nonUniform; } catch {}
-            try { if (this._gizmoManager.rotationGizmo) this._gizmoManager.rotationGizmo.updateGizmoRotationToMatchAttachedMesh = !nonUniform; } catch {}
+            try { this._gizmoManager.updateGizmoRotationToMatchAttachedMesh = !nonUniform; } catch { void 0; }
+            try { if (this._gizmoManager.rotationGizmo) this._gizmoManager.rotationGizmo.updateGizmoRotationToMatchAttachedMesh = !nonUniform; } catch { void 0; }
           }
-        } catch (e) {}
-        try { this._gizmoManager.attachToMesh(attach); } catch {}
+        } catch (e) { void e; }
+        try { this._gizmoManager.attachToMesh(attach); } catch { void 0; }
 
         // Adaptive gizmo: depend on camera zoom but never exceed mesh size
         try {
@@ -723,7 +727,7 @@ export default class SceneProject {
               const bi = attach.getBoundingInfo();
               if (bi && bi.boundingSphere) meshRadius = bi.boundingSphere.radiusWorld || bi.boundingSphere.radius || 0;
             }
-          } catch {}
+          } catch { void 0; }
 
           // cap desired so it does not exceed mesh radius (keep gizmo smaller than mesh)
           if (meshRadius > 0) desired = Math.min(desired, meshRadius * 0.9);
@@ -734,18 +738,18 @@ export default class SceneProject {
           // make gizmo 1/2 of the computed size
           const USER_SCALE_FACTOR = 0.5;
           let finalRatio = Math.max(MIN_GIZMO, Math.min(MAX_GIZMO, desired)) * USER_SCALE_FACTOR;
-          try { this._gizmoManager.scaleRatio = finalRatio; } catch {}
+          try { this._gizmoManager.scaleRatio = finalRatio; } catch { void 0; }
           // leave updateScale behavior as default (allow camera influence)
-        } catch {}
+        } catch { void 0; }
 
         if (this._gizmoManager.positionGizmo) {
-          try { this._gizmoManager.positionGizmo.snapDistance = this._snapEnabled ? this._snapValue : 0; } catch {}
+          try { this._gizmoManager.positionGizmo.snapDistance = this._snapEnabled ? this._snapValue : 0; } catch { void 0; }
         }
       }
-    } catch (e) {}
+    } catch (e) { void e; }
     // call callback
     if (typeof this.onSelect === "function") {
-      try { this.onSelect(this._selectedId); } catch {}
+      try { this.onSelect(this._selectedId); } catch { void 0; }
     }
   }
 
@@ -767,13 +771,13 @@ export default class SceneProject {
     if (!this.scene) return;
     if (want) {
       if (!this._axesHelper) {
-        try { this._axesHelper = new AxesHelper(this.scene, this._gridSize); } catch (e) { this._axesHelper = null; }
+        try { this._axesHelper = new AxesHelper(this.scene, this._gridSize); } catch { this._axesHelper = null; }
       } else {
         this._axesHelper.setVisible(true);
       }
     } else {
       if (this._axesHelper) {
-        try { this._axesHelper.dispose(); } catch (e) {}
+        try { this._axesHelper.dispose(); } catch (e) { void e; }
         this._axesHelper = null;
       }
     }
@@ -782,12 +786,74 @@ export default class SceneProject {
   // 축 표시 상태 반환
   isAxesVisible() { return !!this._axesVisible; }
 
+  // 라이트 / 환경 관련 간단한 API
+  setHemisphericIntensity(value) {
+    try {
+      const v = Number(value) || 0;
+      if (this._hemisphericLight) this._hemisphericLight.intensity = v;
+    } catch (e) { void e; }
+  }
+
+  addDirectionalLight({ direction = { x: -1, y: -2, z: 1 }, intensity = 1, name = null } = {}) {
+    try {
+      if (!this.scene) return null;
+      const id = `dir-${Date.now()}`;
+      const dir = new DirectionalLight(id, new Vector3(direction.x, direction.y, direction.z), this.scene);
+      dir.intensity = Number(intensity) || 1;
+      dir.name = name || id;
+      this._lights.set(id, dir);
+      return id;
+    } catch { return null; }
+  }
+
+  removeLight(id) {
+    try {
+      const l = this._lights.get(id);
+      if (l) { try { l.dispose(); } catch { void 0; } this._lights.delete(id); }
+    } catch (e) { void e; }
+  }
+
+  listLights() {
+    const out = [];
+    try {
+      for (const [id, l] of this._lights) {
+        out.push({ id, type: l.getClassName ? l.getClassName() : "light", intensity: l.intensity, name: l.name || id });
+      }
+      if (this._hemisphericLight) out.push({ id: "hemi", type: "HemisphericLight", intensity: this._hemisphericLight.intensity, name: this._hemisphericLight.name || "hemi" });
+    } catch (e) { void e; }
+    return out;
+  }
+
+  // Gizmo mode: 'position' | 'rotation' | 'scale' | 'none' | 'all'
+  setGizmoMode(mode) {
+    try {
+      if (!this._gizmoManager) return;
+      const m = (mode || "none").toString();
+      this._gizmoManager.positionGizmoEnabled = (m === "position" || m === "all");
+      this._gizmoManager.rotationGizmoEnabled = (m === "rotation" || m === "all");
+      this._gizmoManager.scaleGizmoEnabled = (m === "scale" || m === "all");
+      if (m === "none") this._gizmoManager.attachToMesh(null);
+    } catch (e) { void e; }
+  }
+
+  removeSelectedMesh() {
+    try {
+      if (!this._selectedId) return;
+      this.enqueueCommand({ type: "removeMesh", payload: { id: this._selectedId } });
+      this._selectMeshById(null);
+    } catch (e) { void e; }
+  }
+
+  // Helpers to expose engine/scene for UI components
+  getEngine() { return this.engine; }
+  getScene() { return this.scene; }
+
   // Grid: create a textured plane with repeated dynamic texture for performance
   _createGrid() {
     if (!this.scene) return;
     if (this._gridMesh) return;
     const size = this._gridSize; // world units (확대)
-    const tile = 1; // tile repetition
+    const _tile = 1; // tile repetition
 
     // Compute base cell size (previous behavior) and allow further subdivision by 10
     const baseCell = Math.max(1, Math.round(this._gridSize / 100));
@@ -859,8 +925,8 @@ export default class SceneProject {
   }
 
   _disposeGrid() {
-    if (this._gridMesh) { try { this._gridMesh.dispose(); } catch {} ; this._gridMesh = null; }
-    if (this._gridMaterial) { try { this._gridMaterial.dispose(); } catch {} ; this._gridMaterial = null; }
+    if (this._gridMesh) { try { this._gridMesh.dispose(); } catch { void 0; } this._gridMesh = null; }
+    if (this._gridMaterial) { try { this._gridMaterial.dispose(); } catch { void 0; } this._gridMaterial = null; }
   }
 
   setGridVisible(visible) {
@@ -890,7 +956,8 @@ export default class SceneProject {
           if (runtime.position) position = { x: runtime.position.x, y: runtime.position.y, z: runtime.position.z };
           if (runtime.rotation) rotation = { x: runtime.rotation.x, y: runtime.rotation.y, z: runtime.rotation.z };
           if (runtime.scaling) scaling = { x: runtime.scaling.x, y: runtime.scaling.y, z: runtime.scaling.z };
-        } catch (e) {
+        } catch {
+          void 0;
           // fallback to meta values on error
         }
       }
@@ -926,8 +993,8 @@ export default class SceneProject {
   replaceWithJSON(json) {
     if (!json) return;
     // dispose existing runtime meshes and materials
-    for (const m of this.meshMap.values()) { try { m.dispose(); } catch {} }
-    for (const mat of this.materialMap.values()) { try { mat.dispose(); } catch {} }
+    for (const m of this.meshMap.values()) { try { m.dispose(); } catch { void 0; } }
+    for (const mat of this.materialMap.values()) { try { mat.dispose(); } catch { void 0; } }
     this.meshMap.clear();
     this.materialMap.clear();
     this.meshMetaMap.clear();

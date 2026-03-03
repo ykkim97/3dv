@@ -1,5 +1,4 @@
-import { useEffect, useState } from "react";
-
+import { useState } from "react";
 function NumberInput({ label, value, onChange, step = 0.1 }) {
   return (
     <div style={{ marginBottom: 8 }}>
@@ -27,9 +26,8 @@ function hexToColor3(hex) {
 
 // 컴포넌트 시그니처: meshes prop 추가
 export default function MeshInspector({ meshMeta, meshes = [], onChange, onDelete, onUnmerge }) {
-  const [local, setLocal] = useState(meshMeta || null);
-  useEffect(() => setLocal(meshMeta ? { ...meshMeta } : null), [meshMeta]);
-  if (!local) return <div style={{ padding: 12, color: "#ddd" }}>Select a mesh to edit</div>;
+  const [local, setLocal] = useState(() => (meshMeta ? { ...meshMeta } : null));
+  if (!local) return <div style={{ padding: 12, color: "var(--muted)" }}>Select a mesh to edit</div>;
 
   const apply = (patch) => {
     const updated = { ...local };
@@ -44,7 +42,7 @@ export default function MeshInspector({ meshMeta, meshes = [], onChange, onDelet
   };
 
   return (
-    <div style={{ padding: 12, color: "#eee" }}>
+    <div style={{ padding: 12, color: "var(--text)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
         <div>
           <h3 style={{ margin: 0 }}>{local.name}</h3>
@@ -52,9 +50,9 @@ export default function MeshInspector({ meshMeta, meshes = [], onChange, onDelet
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           {local.kind === "merged" && typeof onUnmerge === "function" ? (
-            <button onClick={() => onUnmerge(local.id)} style={{ padding: "6px 10px", background: "#6b9bff", border: "none", color: "#fff", borderRadius: 8, marginRight: 6 }}>Unmerge</button>
+            <button className="btn btn-primary" type="button" onClick={() => onUnmerge(local.id)} style={{ padding: "6px 10px" }}>Unmerge</button>
           ) : null}
-          <button onClick={() => onDelete && onDelete(local.id)} style={{ padding: "6px 10px", background: "#ff6b6b", border: "none", color: "#fff", borderRadius: 8 }}>Delete</button>
+          <button className="btn btn-warn" type="button" onClick={() => onDelete && onDelete(local.id)} style={{ padding: "6px 10px" }}>Delete</button>
         </div>
       </div>
 
@@ -64,7 +62,7 @@ export default function MeshInspector({ meshMeta, meshes = [], onChange, onDelet
       </div>
 
       <div className="inspector-section">
-        <strong style={{ color: "#fff", display: "block", marginBottom: 8 }}>Position</strong>
+        <strong style={{ color: "var(--text)", display: "block", marginBottom: 8 }}>Position</strong>
         <div className="inspector-group">
           <input className="input" style={{ width: "33%" }} value={local.position.x} onChange={(e) => apply({ position: { x: Number(e.target.value) } })} />
           <input className="input" style={{ width: "33%" }} value={local.position.y} onChange={(e) => apply({ position: { y: Number(e.target.value) } })} />
@@ -73,7 +71,7 @@ export default function MeshInspector({ meshMeta, meshes = [], onChange, onDelet
       </div>
 
       <div className="inspector-section">
-        <strong style={{ color: "#fff", display: "block", marginBottom: 8 }}>Rotation (radians)</strong>
+        <strong style={{ color: "var(--text)", display: "block", marginBottom: 8 }}>Rotation (radians)</strong>
         <div className="inspector-group">
           <input className="input" style={{ width: "33%" }} value={local.rotation.x} onChange={(e) => apply({ rotation: { x: Number(e.target.value) } })} />
           <input className="input" style={{ width: "33%" }} value={local.rotation.y} onChange={(e) => apply({ rotation: { y: Number(e.target.value) } })} />
@@ -82,7 +80,7 @@ export default function MeshInspector({ meshMeta, meshes = [], onChange, onDelet
       </div>
 
       <div className="inspector-section">
-        <strong style={{ color: "#fff", display: "block", marginBottom: 8 }}>Scale</strong>
+        <strong style={{ color: "var(--text)", display: "block", marginBottom: 8 }}>Scale</strong>
         <div className="inspector-group">
           <input className="input" style={{ width: "33%" }} value={local.scaling.x} onChange={(e) => apply({ scaling: { x: Number(e.target.value) } })} />
           <input className="input" style={{ width: "33%" }} value={local.scaling.y} onChange={(e) => apply({ scaling: { y: Number(e.target.value) } })} />
@@ -91,7 +89,7 @@ export default function MeshInspector({ meshMeta, meshes = [], onChange, onDelet
       </div>
 
       <div className="inspector-section">
-        <strong style={{ color: "#fff", display: "block", marginBottom: 8 }}>Material</strong>
+        <strong style={{ color: "var(--text)", display: "block", marginBottom: 8 }}>Material</strong>
         <div style={{ marginBottom: 8 }}>
           <label className="inspector-label">Color</label>
           <input className="input" type="color" value={color3ToHex(local.material.color)} onChange={(e) => apply({ material: { color: hexToColor3(e.target.value) } })} />

@@ -12,23 +12,39 @@ function buildTree(meshes = []) {
 }
 
 function KindIcon({ kind }) {
-  const s = { width: 10, height: 10, display: "inline-block", marginRight: 10, borderRadius: 3 };
-  switch (kind) {
-    case "box": return <span style={{ ...s, background: "#4E77FF" }} aria-hidden title="Box" />;
-    case "sphere": return <span style={{ ...s, background: "#24D18B", borderRadius: 9999 }} aria-hidden title="Sphere" />;
-    case "cylinder": return <span style={{ ...s, background: "#FFC857" }} aria-hidden title="Cylinder" />;
-    case "cone": return <span style={{ ...s, background: "#FF6EA1" }} aria-hidden title="Cone" />;
-    case "line": return <span style={{ width: 14, height: 2, display: "inline-block", background: "#54D6FF", marginRight: 10, borderRadius: 2 }} aria-hidden title="Line" />;
-    case "merged": return <span style={{ ...s, background: "#9D7CFF", borderRadius: 4 }} aria-hidden title="Group" />;
-    default: return <span style={{ ...s, background: "#9AA0A6" }} aria-hidden title={kind} />;
-  }
+  const base = {
+    width: 5,
+    height: 5,
+    marginRight: 4,
+    borderRadius: 999,
+    display: "inline-block",
+  };
+
+  const map = {
+    box: "var(--accent)",
+    sphere: "var(--accent-2)",
+    cylinder: "var(--warn)",
+    cone: "#9b5cf6",
+    line: "var(--muted)",
+    merged: "rgba(255,255,255,0.4)"
+  };
+
+  return (
+    <span
+      style={{
+        ...base,
+        background: map[kind] || "var(--muted)",
+        boxShadow: "0 0 0 2px rgba(0,0,0,0.6)"
+      }}
+    />
+  );
 }
 
 function TreeItem({ node, level = 0, onSelect, selectedId, onDelete, expandedIds, toggleExpand, selectedIdsSet, onSelectionChange }) {
   const isSelected = selectedId === node.id;
   const isExpanded = expandedIds.has(node.id);
   const isMultiSelected = selectedIdsSet && selectedIdsSet.has(node.id);
-  const indent = level * 10;
+  const indent = level * 12;
 
   const handleClick = (e) => {
     // multi-select when ctrl/cmd is held
@@ -47,7 +63,7 @@ function TreeItem({ node, level = 0, onSelect, selectedId, onDelete, expandedIds
   };
 
   return (
-    <div style={{ marginLeft: indent }}>
+    <div className="tree-item" style={{ marginLeft: indent }}>
       <div
         className="mesh-row"
         role="button"
@@ -56,21 +72,42 @@ function TreeItem({ node, level = 0, onSelect, selectedId, onDelete, expandedIds
         onKeyDown={(e) => { if (e.key === "Enter") handleClick(e); }}
         aria-pressed={isSelected}
         style={{
+          padding: "0px 6px",
+          height: 14,
+          minHeight: 14,
+          lineHeight: "14px",
+          fontSize: 10.5,
           display: "flex",
           alignItems: "center",
-          gap: 8,
-          padding: "7px 10px",
+          gap: 4,
           borderRadius: 8,
           cursor: "pointer",
-          background: isMultiSelected ? "linear-gradient(90deg, rgba(78,119,255,0.06), rgba(36,209,139,0.03))" : (isSelected ? "linear-gradient(90deg, rgba(78,119,255,0.03), rgba(36,209,139,0.02))" : "transparent"),
-          border: isSelected ? "1px solid rgba(78,119,255,0.12)" : "1px solid transparent"
+          background:
+            isSelected
+              ? "linear-gradient(90deg, rgba(80,120,255,0.14), rgba(80,120,255,0.04))"
+              : isMultiSelected
+              ? "linear-gradient(90deg, rgba(120,200,255,0.10), rgba(120,200,255,0.03))"
+              : "transparent",
+
+          borderLeft:
+            isSelected
+              ? "2px solid var(--accent)"
+              : isMultiSelected
+              ? "2px solid var(--accent-2)"
+              : "2px solid transparent",
+
+          transition: "background 120ms ease",
+          cursor: "pointer",
         }}
       >
+        {level > 0 ? <span className="tree-hline" aria-hidden /> : null}
+
         <div style={{ width: 18, textAlign: "center", fontSize: 12 }}>
           {node.children && node.children.length ? (
             <button
               onClick={(e) => { e.stopPropagation(); toggleExpand(node.id, level); }}
               aria-label={isExpanded ? "Collapse" : "Expand"}
+              className="tree-expander"
               style={{
                 background: "transparent",
                 border: "none",
@@ -78,7 +115,8 @@ function TreeItem({ node, level = 0, onSelect, selectedId, onDelete, expandedIds
                 cursor: "pointer",
                 transform: `rotate(${isExpanded ? 0 : -90}deg)`,
                 transition: "transform 140ms ease",
-                fontSize: 12,
+                fontSize: 8,
+                marginRight: 4,
                 padding: 0
               }}
               title={isExpanded ? "Collapse" : "Expand"}
@@ -91,7 +129,7 @@ function TreeItem({ node, level = 0, onSelect, selectedId, onDelete, expandedIds
         <KindIcon kind={node.kind} />
 
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div className="mesh-name" style={{ fontWeight: 700, fontSize: 13, color: "#E8EDF6", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          <div className="mesh-name" style={{ fontWeight: 800, fontSize: 13, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
             {node.name || node.id}
           </div>
         </div>
@@ -105,7 +143,7 @@ function TreeItem({ node, level = 0, onSelect, selectedId, onDelete, expandedIds
             style={{
               background: "transparent",
               border: "none",
-              color: "#FF8B8B",
+              color: "var(--warn)",
               padding: "6px",
               borderRadius: 6,
               cursor: "pointer",
@@ -120,7 +158,15 @@ function TreeItem({ node, level = 0, onSelect, selectedId, onDelete, expandedIds
       </div>
 
       {isExpanded && node.children && node.children.length > 0 && (
-        <div style={{ marginTop: 6 }}>
+        <div
+          className="tree-children"
+          style={{
+            marginTop: 6,
+            borderLeft: "1px solid rgba(255,255,255,0.05)",
+            marginLeft: 10,
+            paddingLeft: 10
+          }}
+        >
           {node.children.map(child => (
             <TreeItem
               key={child.id}
@@ -163,28 +209,25 @@ export default function MeshList({ meshes = [], onSelect, selectedId, onDelete, 
   };
 
   return (
-    <div>
-      <h3 style={{ marginTop: 8, marginBottom: 8, color: "#F2F4F8", textAlign: "center" }}>Meshes</h3>
-      <div className="mesh-list-card" style={{ padding: 6 }}>
-        {tree.length === 0 ? (
-          <div style={{ color: "var(--muted)", padding: 12, textAlign: "center" }}>No meshes</div>
-        ) : (
-          tree.map(node => (
-            <TreeItem
-              key={node.id}
-              node={node}
-              level={0}
-              onSelect={onSelect}
-              selectedId={selectedId}
-              onDelete={onDelete}
-              expandedIds={expandedIds}
-              toggleExpand={toggleExpand}
-              selectedIdsSet={selectedIds}
-              onSelectionChange={onSelectionChange}
-            />
-          ))
-        )}
-      </div>
+    <div className="mesh-tree">
+      {tree.length === 0 ? (
+        <div style={{ color: "var(--muted)", padding: 12, textAlign: "center" }}>No meshes</div>
+      ) : (
+        tree.map(node => (
+          <TreeItem
+            key={node.id}
+            node={node}
+            level={0}
+            onSelect={onSelect}
+            selectedId={selectedId}
+            onDelete={onDelete}
+            expandedIds={expandedIds}
+            toggleExpand={toggleExpand}
+            selectedIdsSet={selectedIds}
+            onSelectionChange={onSelectionChange}
+          />
+        ))
+      )}
     </div>
   );
 }

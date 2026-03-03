@@ -22,8 +22,9 @@ export default function App() {
   const [currentSceneId, setCurrentSceneId] = useState(null);
   const [newName, setNewName] = useState("");
 
-  const sceneInstanceMap = useRef(new Map());
+  const [sceneInstances, setSceneInstances] = useState(() => new Map());
   const [selectedMeshId, setSelectedMeshId] = useState(null);
+  const [selectedIds, setSelectedIds] = useState(new Set());
   const [, forceRerender] = useState(0);
 
   // Undo / Redo stacks (store simple records)
@@ -51,31 +52,35 @@ export default function App() {
     setCurrentSceneId(id);
   };
 
-  const getCurrentInstance = () => sceneInstanceMap.current.get(currentSceneId);
+  const getCurrentInstance = () => sceneInstances.get(currentSceneId);
 
   const handleSceneReady = useCallback(
     (sceneId, sp) => {
       // store instance
-      sceneInstanceMap.current.set(sceneId, sp);
+      setSceneInstances((prev) => {
+        const next = new Map(prev);
+        next.set(sceneId, sp);
+        return next;
+      });
 
       // register selection callback (scene -> app)
-      sp.setSelectionCallback((meshId) => {
-        setSelectedMeshId(meshId);
+      sp.setSelectionCallback((id) => {
+        setSelectedMeshId(id);
         // keep selectedIds in sync: if single select done in scene, set that as single selection
-        setSelectedIds(new Set(meshId ? [meshId] : []));
+        setSelectedIds(new Set(id ? [id] : []));
         forceRerender((n) => n + 1);
       });
 
       // register runtime-change callback so gizmo-driven transforms update the UI
       if (typeof sp.setChangeCallback === 'function') {
-        sp.setChangeCallback((meshId) => {
+        sp.setChangeCallback(() => {
           // if inspector currently showing this mesh, force an update
           forceRerender((n) => n + 1);
         });
       }
 
       // prevent camera from responding to keyboard arrows (we use arrows for mesh nudge)
-      try { if (typeof sp.setCameraKeyboardEnabled === 'function') sp.setCameraKeyboardEnabled(false); } catch (e) {}
+      try { if (typeof sp.setCameraKeyboardEnabled === 'function') sp.setCameraKeyboardEnabled(false); } catch (err) { void err; }
 
       // apply current grid/axes/gizmo visibility to scene
       sp.setGridVisible(gridVisible);
@@ -102,7 +107,7 @@ export default function App() {
   };
 
   const saveSceneToJSON = (id) => {
-    const instance = sceneInstanceMap.current.get(id);
+    const instance = sceneInstances.get(id);
     if (!instance) {
       alert("Scene not ready or missing");
       return;
@@ -114,7 +119,7 @@ export default function App() {
 
   const switchScene = (id) => {
     if (id === currentSceneId) return;
-    const prev = sceneInstanceMap.current.get(currentSceneId);
+    const prev = sceneInstances.get(currentSceneId);
     if (prev) {
       const json = prev.serialize();
       setScenes((prevArr) => prevArr.map((s) => (s.id === currentSceneId ? { ...s, json } : s)));
@@ -125,12 +130,16 @@ export default function App() {
   };
 
   const deleteScene = (id) => {
-    const inst = sceneInstanceMap.current.get(id);
+    const inst = sceneInstances.get(id);
     if (inst) {
       try {
         inst.disposeCompletely();
-      } catch {}
-      sceneInstanceMap.current.delete(id);
+      } catch (err) { void err; }
+      setSceneInstances((prev) => {
+        const next = new Map(prev);
+        next.delete(id);
+        return next;
+      });
     }
     setScenes((s) => s.filter((sc) => sc.id !== id));
     if (currentSceneId === id) setCurrentSceneId(null);
@@ -171,8 +180,9 @@ export default function App() {
     }, 60);
   };
 
-  const mergeSelected = () => {
-    if (!currentInstance) {
+  const _mergeSelected = () => {
+    const inst = getCurrentInstance();
+    if (!inst) {
       alert("No scene active");
       return;
     }
@@ -185,7 +195,7 @@ export default function App() {
     const name = `Group-${Math.floor(Math.random() * 1000)}`;
     const meta = createMeta("merged", { id, name, params: { mergedIds } });
 
-    currentInstance.enqueueCommand({ type: "createMesh", payload: { ...meta } });
+    inst.enqueueCommand({ type: "createMesh", payload: { ...meta } });
 
     // push undo/redo entry (split will restore)
     undoStack.current.push({
@@ -327,6 +337,22 @@ export default function App() {
     }
   };
 
+  // nudge helper: safely update selected mesh position
+  const nudgeSelectedMesh = (dx, dy, dz) => {
+    try {
+      const id = selectedMeshId;
+      if (!id) return;
+      const inst = getCurrentInstance();
+      if (!inst) return;
+      const meta = inst.getMeta ? inst.getMeta(id) : null;
+      if (!meta) return;
+      const newPos = { x: (meta.position?.x || 0) + (dx || 0), y: (meta.position?.y || 0) + (dy || 0), z: (meta.position?.z || 0) + (dz || 0) };
+      inst.enqueueCommand({ type: 'updateMesh', payload: { id, changes: { position: newPos } } });
+      // trigger UI update
+      forceRerender(n => n + 1);
+    } catch (err) { console.error('nudgeSelectedMesh error', err); }
+  };
+
   useEffect(() => {
     const onKey = (e) => {
       // ignore shortcuts when typing in inputs/selects/textareas
@@ -334,7 +360,7 @@ export default function App() {
         const tg = e.target;
         const tag = tg && tg.tagName && tg.tagName.toLowerCase();
         if (tag === 'input' || tag === 'textarea' || tag === 'select' || (tg && tg.isContentEditable)) return;
-      } catch (err) {}
+      } catch (err) { void err; }
 
       // movement shortcuts: Arrow / PageUp/PageDown
       try {
@@ -381,23 +407,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selectedMeshId]);
-
-  // nudge helper: safely update selected mesh position
-  const nudgeSelectedMesh = (dx, dy, dz) => {
-    try {
-      const id = selectedMeshId;
-      if (!id) return;
-      const inst = getCurrentInstance();
-      if (!inst) return;
-      const meta = inst.getMeta ? inst.getMeta(id) : null;
-      if (!meta) return;
-      const newPos = { x: (meta.position?.x || 0) + (dx || 0), y: (meta.position?.y || 0) + (dy || 0), z: (meta.position?.z || 0) + (dz || 0) };
-      inst.enqueueCommand({ type: 'updateMesh', payload: { id, changes: { position: newPos } } });
-      // trigger UI update
-      forceRerender(n => n + 1);
-    } catch (e) { console.error('nudgeSelectedMesh error', e); }
-  };
+  }, [selectedMeshId, deleteMeshFromScene, nudgeSelectedMesh, undo, redo]);
 
   const toggleGrid = () => {
     const next = !gridVisible;
@@ -407,10 +417,9 @@ export default function App() {
   };
 
   const currentScene = scenes.find((s) => s.id === currentSceneId);
-  const currentInstance = sceneInstanceMap.current.get(currentSceneId);
+  const currentInstance = sceneInstances.get(currentSceneId);
   const meshList = currentInstance ? currentInstance.getMeshMetaList() : currentScene?.json?.meshes || [];
   const selectedMeshMeta = meshList ? meshList.find((m) => m.id === selectedMeshId) : null;
-  const [selectedIds, setSelectedIds] = useState(new Set());
   const [isDragOver, setIsDragOver] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [importJson, setImportJson] = useState(null);
@@ -483,7 +492,7 @@ export default function App() {
     if (importTarget === "replace") {
       // Replace meshes of current scene (if instance attached), otherwise replace stored scene JSON
       if (currentSceneId) {
-        const inst = sceneInstanceMap.current.get(currentSceneId);
+        const inst = sceneInstances.get(currentSceneId);
         if (inst) {
           const importedMeshes = Array.isArray(json.meshes) ? json.meshes : [];
           // remove all existing meshes then create imported ones for a clean replace
@@ -492,7 +501,7 @@ export default function App() {
             for (const m of existing) {
               inst.enqueueCommand({ type: "removeMesh", payload: { id: m.id } });
             }
-          } catch (e) { /* ignore */ }
+          } catch { void 0; }
           for (const m of importedMeshes) {
             const payload = { kind: m.kind, params: m.params, position: m.position, rotation: m.rotation, scaling: m.scaling, id: m.id, name: m.name || m.id, material: m.material, parent: m.parent };
             inst.enqueueCommand({ type: "createMesh", payload });
@@ -552,7 +561,7 @@ export default function App() {
 
   return (
     <div
-      style={{ height: "100vh", display: "flex", flexDirection: "column" }}
+      className="app-shell"
       onDrop={handleDrop}
       onDragOver={handleDragOver}
       onDragEnter={handleDragEnter}
@@ -569,19 +578,23 @@ export default function App() {
         onShowShortcuts={() => setShowShortcuts(true)}
       />
       <input ref={fileInputRef} type="file" accept="application/json" style={{ display: "none" }} onChange={handleImportFile} />
-      <div style={{ flex: 1, display: "flex", alignItems: "stretch" }}>
+      <div className="app-body">
         {isDragOver && (
-          <div style={{ position: "fixed", inset: 0, zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
-            <div style={{ pointerEvents: "auto", background: "rgba(0,0,0,0.7)", color: "#fff", padding: 18, borderRadius: 8, boxShadow: "0 10px 40px rgba(0,0,0,0.6)" }}>
+          <div className="overlay" style={{ zIndex: 60, pointerEvents: "none" }}>
+            <div className="modal" style={{ width: 560, pointerEvents: "auto" }}>
               Drop JSON file to import. (OK = Overwrite current scene, Cancel = Add as new scene)
             </div>
           </div>
         )}
         {showImportModal && (
-          <div style={{ position: "fixed", inset: 0, zIndex: 120, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.5)" }}>
-            <div style={{ width: 480, background: "var(--panel)", padding: 18, borderRadius: 10, boxShadow: "0 20px 60px rgba(0,0,0,0.6)", color: "#fff" }}>
-              <h3 style={{ marginTop: 0 }}>Import Scene</h3>
-              <div style={{ marginBottom: 8, color: "var(--muted)" }}>File: {importFileName}</div>
+          <div className="overlay overlay-backdrop" style={{ zIndex: 120 }}>
+            <div className="modal" style={{ width: 520 }}>
+              <div className="modal-header">
+                <h3 className="modal-title">Import Scene</h3>
+                <button className="btn btn-ghost" type="button" onClick={cancelImport} aria-label="Close">✕</button>
+              </div>
+
+              <div className="modal-sub">File: {importFileName}</div>
                     <div style={{ marginBottom: 8 }}>
                       <label style={{ display: "block", marginBottom: 6 }}>Upload action</label>
                       <div style={{ display: "flex", gap: 8 }}>
@@ -595,24 +608,24 @@ export default function App() {
                   <span style={{ fontSize: 13, color: 'var(--muted)' }}>Verbose import logging</span>
                 </label>
               </div>
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
-                <button onClick={cancelImport} style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.06)", padding: "8px 12px" }}>Cancel</button>
-                <button onClick={applyImport} style={{ background: "var(--accent)", border: "none", padding: "8px 12px" }}>Import</button>
+              <div className="modal-actions">
+                <button className="btn btn-ghost" type="button" onClick={cancelImport}>Cancel</button>
+                <button className="btn btn-primary" type="button" onClick={applyImport}>Import</button>
               </div>
             </div>
           </div>
         )}
         {showShortcuts && (
-          <div style={{ position: "fixed", inset: 0, zIndex: 140, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.6)" }}>
-            <div style={{ width: 520, background: "var(--panel)", padding: 18, borderRadius: 10, boxShadow: "0 30px 80px rgba(0,0,0,0.7)", color: "#fff" }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h3 style={{ margin: 0 }}>Keyboard Shortcuts</h3>
-                <button onClick={() => setShowShortcuts(false)} style={{ background: 'transparent', border: 'none', color: '#fff', fontSize: 16 }}>✕</button>
+          <div className="overlay overlay-backdrop" style={{ zIndex: 140 }}>
+            <div className="modal" style={{ width: 560 }}>
+              <div className="modal-header">
+                <h3 className="modal-title">Keyboard Shortcuts</h3>
+                <button className="btn btn-ghost" type="button" onClick={() => setShowShortcuts(false)} aria-label="Close">✕</button>
               </div>
-              <div style={{ marginTop: 12, color: 'var(--muted)' }}>
+              <div className="modal-sub">
                 Use keyboard to quickly move and edit selected mesh. Focus must not be inside an input.
               </div>
-              <table style={{ width: '100%', marginTop: 12, borderCollapse: 'collapse', color: '#e8eef8' }}>
+              <table style={{ width: '100%', marginTop: 12, borderCollapse: 'collapse', color: 'var(--text)' }}>
                 <tbody>
                   <tr><td style={{ padding: 8, width: 220 }}>Arrow Left / Right</td><td style={{ padding: 8 }}>Move selected mesh along X axis (- / +)</td></tr>
                   <tr><td style={{ padding: 8 }}>Arrow Up / Down</td><td style={{ padding: 8 }}>Move selected mesh along Z axis (forward / back)</td></tr>
@@ -624,8 +637,8 @@ export default function App() {
                   <tr><td style={{ padding: 8 }}>Ctrl/Cmd + Y or Shift+Ctrl/Cmd + Z</td><td style={{ padding: 8 }}>Redo</td></tr>
                 </tbody>
               </table>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 14 }}>
-                <button onClick={() => setShowShortcuts(false)} style={{ padding: '8px 12px', background: 'var(--accent)', border: 'none', color: '#fff', borderRadius: 8 }}>Close</button>
+              <div className="modal-actions">
+                <button className="btn btn-primary" type="button" onClick={() => setShowShortcuts(false)}>Close</button>
               </div>
             </div>
           </div>
@@ -633,11 +646,17 @@ export default function App() {
         {/* LEFT: Icon bar + panel (refactored) */}
         <aside className="sidebar" role="complementary" aria-label="Left sidebar">
           <div className="sidebar-icons" aria-hidden>
-            <button title="Scenes" onClick={() => setLeftTab("scenes")} className={`icon-btn ${leftTab === "scenes" ? "active" : ""}`}>
-              <span style={{ fontSize: 18 }}>📂</span>
+            <button title="Scenes" type="button" onClick={() => setLeftTab("scenes")} className={`icon-btn ${leftTab === "scenes" ? "active" : ""}`}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+                <path d="M3.5 6.5h6l2 2H20a1.5 1.5 0 0 1 1.5 1.5v8A2.5 2.5 0 0 1 19 20.5H5A2.5 2.5 0 0 1 2.5 18V8A1.5 1.5 0 0 1 4 6.5Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/>
+              </svg>
             </button>
-            <button title="Meshes" onClick={() => setLeftTab("meshes")} className={`icon-btn ${leftTab === "meshes" ? "active" : ""}`}>
-              <span style={{ fontSize: 18 }}>🧱</span>
+            <button title="Meshes" type="button" onClick={() => setLeftTab("meshes")} className={`icon-btn ${leftTab === "meshes" ? "active" : ""}`}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+                <path d="M12 2.8 20 7.2v9.6L12 21.2 4 16.8V7.2L12 2.8Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/>
+                <path d="M4 7.2l8 4.4 8-4.4" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/>
+                <path d="M12 11.6v9.6" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/>
+              </svg>
             </button>
           </div>
 
@@ -657,7 +676,7 @@ export default function App() {
                   <>
                     <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
                       <input placeholder="scene name" value={newName} onChange={(e) => setNewName(e.target.value)} className="input" style={{ flex: 1 }} />
-                      <button onClick={createScene} style={{ background: "var(--accent)", borderColor: "transparent" }}>Create</button>
+                      <button className="btn btn-primary" type="button" onClick={createScene}>Create</button>
                     </div>
 
                     <div style={{ marginTop: 12 }}>
@@ -668,8 +687,8 @@ export default function App() {
                             <div className="sub">{s.id}</div>
                           </div>
                           <div style={{ display: "flex", gap: 8 }}>
-                            <button onClick={(ev) => { ev.stopPropagation(); saveSceneToJSON(s.id); }} style={{ background: "#23273b" }}>Save</button>
-                            <button onClick={(ev) => { ev.stopPropagation(); deleteScene(s.id); }} style={{ background: "#23273b", color: "#ff8080" }}>Delete</button>
+                            <button type="button" onClick={(ev) => { ev.stopPropagation(); saveSceneToJSON(s.id); }}>Save</button>
+                            <button type="button" className="btn btn-warn" onClick={(ev) => { ev.stopPropagation(); deleteScene(s.id); }}>Delete</button>
                           </div>
                         </div>
                       ))}
@@ -689,23 +708,23 @@ export default function App() {
                 {!meshesCollapsed && (
                   <>
                     <div className="add-collection" role="toolbar" aria-label="Add meshes">
-                      <button title="Add Box" onClick={() => addMeshToCurrent("box")} className="icon-btn" style={{ background: "linear-gradient(180deg,#2a6cf0,#1b58d6)", color: "#fff" }}>
+                      <button title="Add Box" type="button" onClick={() => addMeshToCurrent("box")} className="icon-btn">
                         <svg className="svg" viewBox="0 0 24 24" width="18" height="18" xmlns="http://www.w3.org/2000/svg" aria-hidden><path d="M3 7.5L12 3l9 4.5v7L12 21 3 14.5v-7z" /></svg>
                       </button>
 
-                      <button title="Add Sphere" onClick={() => addMeshToCurrent("sphere")} className="icon-btn" style={{ background: "linear-gradient(180deg,#34d58f,#16b06a)", color: "#08210f" }}>
+                      <button title="Add Sphere" type="button" onClick={() => addMeshToCurrent("sphere")} className="icon-btn">
                         <svg className="svg" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="8" /></svg>
                       </button>
 
-                      <button title="Add Cylinder" onClick={() => addMeshToCurrent("cylinder")} className="icon-btn" style={{ background: "linear-gradient(180deg,#f7b64a,#f39b14)", color: "#2b1b00" }}>
+                      <button title="Add Cylinder" type="button" onClick={() => addMeshToCurrent("cylinder")} className="icon-btn">
                         <svg className="svg" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><ellipse cx="12" cy="5" rx="7" ry="2" /><path d="M5 5v11c0 1.1 3.1 2 7 2s7-.9 7-2V5" /></svg>
                       </button>
 
-                      <button title="Add Cone" onClick={() => addMeshToCurrent("cone")} className="icon-btn" style={{ background: "linear-gradient(180deg,#f06c9b,#d84a7f)", color: "#fff" }}>
+                      <button title="Add Cone" type="button" onClick={() => addMeshToCurrent("cone")} className="icon-btn">
                         <svg className="svg" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 2 L20 20 H4 Z" /></svg>
                       </button>
 
-                      <button title="Add Line" onClick={() => addMeshToCurrent("line")} className="icon-btn" style={{ background: "linear-gradient(180deg,#6ad3ff,#2bb6ff)", color: "#022033" }}>
+                      <button title="Add Line" type="button" onClick={() => addMeshToCurrent("line")} className="icon-btn">
                         <svg className="svg" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M4 12 L10 8 L14 16 L20 12" stroke="currentColor" fill="none" strokeWidth="2"/></svg>
                       </button>
                     </div>
@@ -728,7 +747,7 @@ export default function App() {
         </aside>
 
         {/* CENTER */}
-        <main style={{ flex: 1, background: "var(--bg-1)", display: "flex", alignItems: "stretch" }}>
+        <main className="center">
           {currentSceneId ? (
             <SceneView
               key={currentSceneId}
@@ -745,14 +764,16 @@ export default function App() {
               headerVisible={sceneHeaderVisible}
             />
           ) : (
-            <div style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "#c8cbe0" }}>Select or create a scene</div>
+            <div style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--muted)" }}>Select or create a scene</div>
           )}
         </main>
 
         {/* RIGHT (inspector) — reduced width to 300 */}
-        <aside style={{ width: 300, padding: 12, background: "var(--panel)", borderLeft: "1px solid var(--border)" }}>
-          <h2 style={{ marginTop: 4, fontSize: 16 }}>Inspector</h2>
-          <MeshInspector meshMeta={selectedMeshMeta} meshes={meshList || []} onChange={onInspectorChange} onDelete={(id) => { deleteMeshFromScene(id); }} onUnmerge={onUnmerge} />
+        <aside className="inspector-panel">
+          <div className="inspector-title">Inspector</div>
+          <div className="inspector-content">
+            <MeshInspector key={selectedMeshId || "none"} meshMeta={selectedMeshMeta} meshes={meshList || []} onChange={onInspectorChange} onDelete={(id) => { deleteMeshFromScene(id); }} onUnmerge={onUnmerge} />
+          </div>
         </aside>
       </div>
     </div>

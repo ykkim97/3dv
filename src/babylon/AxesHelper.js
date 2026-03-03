@@ -59,7 +59,7 @@ export default class AxesHelper {
     // create tick marks along the axis at configured spacing
     try {
       this._createTicksAndLabels(from, to, color);
-    } catch (e) {}
+    } catch (err) { void err; }
   }
 
   _createTicksAndLabels(from, to, color) {
@@ -120,7 +120,7 @@ export default class AxesHelper {
           plane.material = mat;
           this._meshes.push(plane);
           this._materials.push(mat);
-        } catch (e) {}
+        } catch (err) { void err; }
       }
     }
   }
@@ -149,16 +149,16 @@ export default class AxesHelper {
 
   setVisible(visible) {
     for (const m of this._meshes) {
-      try { m.setEnabled(!!visible); } catch (e) {}
+      try { m.setEnabled(!!visible); } catch (err) { void err; }
     }
   }
 
   dispose() {
     for (const m of this._meshes) {
-      try { m.dispose(); } catch (e) {}
+      try { m.dispose(); } catch (err) { void err; }
     }
     for (const mat of this._materials) {
-      try { mat.dispose(); } catch (e) {}
+      try { mat.dispose(); } catch (err) { void err; }
     }
     this._meshes = [];
     this._materials = [];
