@@ -3,15 +3,18 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 import { createMeta } from "./babylon/MeshEntities";
 import MeshInspector from "./components/MeshInspector.jsx";
+import GuiPanelInspector from "./components/GuiPanelInspector.jsx";
 import MeshList from "./components/MeshList.jsx";
 import MeshPrimitivesToolbar from "./components/MeshPrimitivesToolbar.jsx";
 import SceneView from "./components/SceneView.jsx";
 import TopBar from "./components/TopBar.jsx";
+import ViewPresetBar from "./components/ViewPresetBar.jsx";
 import { getDemoWasm } from "./wasm/demoWasm";
 import ScriptEngine from "./runtime/ScriptEngine";
 import ScriptEditorModal from "./components/ScriptEditorModal.jsx";
 import { getSceneNameError, normalizeSceneName } from "./utils/sceneName";
 import HelpModal from "./components/HelpModal.jsx";
+import Tools from "./components/Tools.jsx";
 import MeshContextMenu from "./components/MeshContextMenu.jsx";
 import MeshPropertiesModal from "./components/MeshPropertiesModal.jsx";
 import RenameModal from "./components/RenameModal.jsx";
@@ -27,18 +30,33 @@ function downloadJSON(obj, filename = "scene.json") {
   a.remove();
 }
 
+function buildPreorderIds(meshes = []) {
+  const map = new Map();
+  for (const mesh of meshes) map.set(mesh.id, { ...mesh, children: [] });
+  const roots = [];
+  for (const node of map.values()) {
+    if (node.parent && map.has(node.parent)) map.get(node.parent).children.push(node);
+    else roots.push(node);
+  }
+  const out = [];
+  const visit = (node) => {
+    out.push(node.id);
+    if (node.children && node.children.length) {
+      for (const child of node.children) visit(child);
+    }
+  };
+  for (const root of roots) visit(root);
+  return out;
+}
+
 export default function App() {
   const [lang, setLang] = useState(() => {
     try {
       const saved = localStorage.getItem("lumatrix-lang");
-      if (saved === LANGS.ko || saved === LANGS.en) return saved;
+      if (saved) return saved;
     } catch (err) { void err; }
-    return LANGS.ko;
+    return (LANGS && LANGS.length ? LANGS[0] : "en");
   });
-
-  useEffect(() => {
-    try { localStorage.setItem("lumatrix-lang", lang); } catch (err) { void err; }
-  }, [lang]);
 
   const t = useMemo(() => makeT(lang), [lang]);
 
@@ -70,11 +88,14 @@ export default function App() {
   const [sceneInstances, setSceneInstances] = useState(() => new Map());
   const [selectedMeshId, setSelectedMeshId] = useState(null);
   const [selectedIds, setSelectedIds] = useState(new Set());
+  const [viewportTool, setViewportTool] = useState("move");
   const [, forceRerender] = useState(0);
 
   // Multi-select helpers
   const selectionAnchorIdRef = useRef(null);
   const meshListRef = useRef([]);
+  const selectedIdsRef = useRef(new Set());
+  const selectedMeshIdRef = useRef(null);
 
   // Undo / Redo stacks (store simple records)
   const undoStack = useRef([]);
@@ -94,6 +115,10 @@ export default function App() {
   // scene header visibility (toggle without re-creating the scene)
   const [sceneHeaderVisible, setSceneHeaderVisible] = useState(true);
 
+  // Snap (gizmo) settings
+  const [snapEnabled, setSnapEnabled] = useState(false);
+  const [snapMove, setSnapMove] = useState(0.5); // 0.1 / 0.5 / 1
+
   // Mode: edit vs runtime
   const [runtimeMode, setRuntimeMode] = useState(false);
 
@@ -105,12 +130,15 @@ export default function App() {
   const [scriptEditorMeshId, setScriptEditorMeshId] = useState(null);
 
   const [showHelp, setShowHelp] = useState(false);
+  const [showTools, setShowTools] = useState(false);
+  const [scriptEngine] = useState(() => new ScriptEngine({ timeoutMs: 800 }));
 
   const [meshCtx, setMeshCtx] = useState(null); // { meshId, x, y }
   const [meshPropsOpen, setMeshPropsOpen] = useState(false);
   const [meshPropsId, setMeshPropsId] = useState(null);
   const [meshRenameOpen, setMeshRenameOpen] = useState(false);
   const [meshRenameId, setMeshRenameId] = useState(null);
+  const [selectedGuiPanelId, setSelectedGuiPanelId] = useState(null);
 
   const createScene = () => {
     const err = getSceneNameError(newName);
@@ -123,6 +151,91 @@ export default function App() {
   };
 
   const getCurrentInstance = () => sceneInstances.get(currentSceneId);
+
+  useEffect(() => {
+    selectedIdsRef.current = selectedIds;
+  }, [selectedIds]);
+
+  useEffect(() => {
+    selectedMeshIdRef.current = selectedMeshId;
+  }, [selectedMeshId]);
+
+  const applySelectionToCurrent = useCallback((idsInput, activeId = null) => {
+    const nextIds = new Set(Array.from(idsInput || []).filter(Boolean));
+    const nextActive = activeId && nextIds.has(activeId)
+      ? activeId
+      : (nextIds.size ? Array.from(nextIds).at(-1) : null);
+
+    setSelectedIds(nextIds);
+    setSelectedMeshId(nextActive);
+    if (!nextIds.size) selectionAnchorIdRef.current = null;
+    else if (nextActive) selectionAnchorIdRef.current = nextActive;
+
+    const inst = sceneInstances.get(currentSceneId);
+    try {
+      if (inst && typeof inst.setHighlightedMeshes === "function") {
+        inst.setHighlightedMeshes(Array.from(nextIds), nextActive);
+      } else if (inst) {
+        if (nextActive) inst.highlightMesh(nextActive);
+        else inst.clearAllHighlights?.();
+      }
+    } catch (err) { void err; }
+
+    forceRerender((n) => n + 1);
+    return { nextIds, nextActive };
+  }, [sceneInstances, currentSceneId]);
+
+  const applySelectionIntent = useCallback((id, info = {}) => {
+    const wantToggle = !!(info && (info.ctrlKey || info.metaKey));
+    const wantRange = !!(info && info.shiftKey);
+    const current = new Set(selectedIdsRef.current || []);
+
+    if (!id || info.empty) {
+      if (wantToggle || wantRange) return applySelectionToCurrent(current, selectedMeshIdRef.current);
+      return applySelectionToCurrent([], null);
+    }
+
+    let next = new Set(current);
+    let nextActive = id;
+
+    if (wantRange) {
+      const anchor = selectionAnchorIdRef.current;
+      const order = buildPreorderIds(meshListRef.current || []);
+      const aIdx = anchor ? order.indexOf(anchor) : -1;
+      const bIdx = order.indexOf(id);
+      if (aIdx >= 0 && bIdx >= 0) {
+        const lo = Math.min(aIdx, bIdx);
+        const hi = Math.max(aIdx, bIdx);
+        next = wantToggle ? new Set(current) : new Set();
+        for (const sid of order.slice(lo, hi + 1)) next.add(sid);
+      } else {
+        next = new Set([id]);
+      }
+    } else if (wantToggle) {
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      nextActive = next.has(id) ? id : (next.size ? Array.from(next).at(-1) : null);
+    } else {
+      next = new Set([id]);
+    }
+
+    return applySelectionToCurrent(next, nextActive);
+  }, [applySelectionToCurrent]);
+
+  const applyBoxSelection = useCallback((ids = [], info = {}) => {
+    const uniqueIds = Array.from(new Set((ids || []).filter(Boolean)));
+    const additive = !!(info && (info.ctrlKey || info.metaKey || info.shiftKey));
+    const current = new Set(selectedIdsRef.current || []);
+
+    if (!uniqueIds.length) {
+      if (additive) return applySelectionToCurrent(current, selectedMeshIdRef.current);
+      return applySelectionToCurrent([], null);
+    }
+
+    const next = additive ? new Set(current) : new Set();
+    for (const id of uniqueIds) next.add(id);
+    return applySelectionToCurrent(next, uniqueIds[uniqueIds.length - 1] || null);
+  }, [applySelectionToCurrent]);
 
   const openScriptEditor = (meshId) => {
     if (!meshId) return;
@@ -138,6 +251,7 @@ export default function App() {
     (sceneId, sp) => {
       // store instance
       setSceneInstances((prev) => {
+        if (prev.get(sceneId) === sp) return prev;
         const next = new Map(prev);
         next.set(sceneId, sp);
         return next;
@@ -145,15 +259,26 @@ export default function App() {
 
       // register selection callback (scene -> app)
       sp.setSelectionCallback((id, info) => {
-        setSelectedMeshId(id);
-        // Only collapse to single selection when the user picked in the viewport.
-        // App-driven highlight (source='api') must not destroy an existing multi-selection.
-        if (info && info.source === 'pick') {
-          setSelectedIds(new Set(id ? [id] : []));
-          selectionAnchorIdRef.current = id || null;
+        if (info && info.source === "pick") {
+          applySelectionIntent(id, info);
+          return;
         }
-        forceRerender((n) => n + 1);
+        applySelectionToCurrent(id ? [id] : [], id || null);
       });
+
+      // gui panel interactions
+      try {
+        if (typeof sp.setGuiPanelCallback === 'function') {
+          sp.setGuiPanelCallback((id) => {
+            try {
+              setSelectedGuiPanelId(id);
+              // also clear mesh selection when a panel is selected
+              setSelectedIds(new Set());
+              setSelectedMeshId(null);
+            } catch (err) { void err; }
+          });
+        }
+      } catch (err) { void err; }
 
       // register runtime-change callback so gizmo-driven transforms update the UI
       if (typeof sp.setChangeCallback === 'function') {
@@ -170,6 +295,15 @@ export default function App() {
       sp.setGridVisible(gridVisible);
       sp.setAxesVisible(axesVisible);
       if (typeof sp.setGizmoVisible === 'function') sp.setGizmoVisible(runtimeMode ? false : gizmoVisible);
+      try { if (typeof sp.setViewportToolMode === "function") sp.setViewportToolMode(viewportTool); } catch (err) { void err; }
+
+      // apply snap settings
+      try {
+        if (typeof sp.setSnapEnabled === 'function') sp.setSnapEnabled(snapEnabled);
+        if (typeof sp.setSnapValue === 'function') sp.setSnapValue(snapMove);
+        if (typeof sp.setRotateSnapDegrees === 'function') sp.setRotateSnapDegrees(15);
+        if (typeof sp.setScaleSnapValue === 'function') sp.setScaleSnapValue(0.1);
+      } catch (err) { void err; }
 
       // inject WASM exports into SceneProject (optional; safe if WASM fails)
       try {
@@ -182,8 +316,7 @@ export default function App() {
 
       // inject script engine (Worker sandbox)
       try {
-        const eng = scriptEngineRef.current;
-        if (sp && typeof sp.setScriptEngine === "function") sp.setScriptEngine(eng);
+        if (sp && typeof sp.setScriptEngine === "function") sp.setScriptEngine(scriptEngine);
       } catch (err) { void err; }
 
       // apply current mode
@@ -191,8 +324,37 @@ export default function App() {
 
       forceRerender((n) => n + 1);
     },
-    [gridVisible, axesVisible, gizmoVisible, runtimeMode]
+    [gridVisible, axesVisible, gizmoVisible, runtimeMode, snapEnabled, snapMove, viewportTool, applySelectionIntent, applySelectionToCurrent, scriptEngine]
   );
+
+  // Push snap settings to the current instance when toggled/changed.
+  useEffect(() => {
+    const inst = sceneInstances.get(currentSceneId);
+    if (!inst) return;
+    try {
+      if (typeof inst.setSnapEnabled === 'function') inst.setSnapEnabled(snapEnabled);
+      if (typeof inst.setSnapValue === 'function') inst.setSnapValue(snapMove);
+      if (typeof inst.setRotateSnapDegrees === 'function') inst.setRotateSnapDegrees(15);
+      if (typeof inst.setScaleSnapValue === 'function') inst.setScaleSnapValue(0.1);
+    } catch (err) { void err; }
+  }, [snapEnabled, snapMove, sceneInstances, currentSceneId]);
+
+  useEffect(() => {
+    const inst = sceneInstances.get(currentSceneId);
+    if (!inst) return;
+    try { if (typeof inst.setViewportToolMode === "function") inst.setViewportToolMode(viewportTool); } catch (err) { void err; }
+    try { if (typeof inst.setCameraPointerOrbitEnabled === "function") inst.setCameraPointerOrbitEnabled(!(viewportTool === "select" || viewportTool === "cursor" || viewportTool === "measure")); } catch (err) { void err; }
+  }, [viewportTool, sceneInstances, currentSceneId]);
+
+  useEffect(() => {
+    const inst = sceneInstances.get(currentSceneId);
+    if (!inst) return;
+    try {
+      if (typeof inst.setHighlightedMeshes === "function") {
+        inst.setHighlightedMeshes(Array.from(selectedIds || []), selectedMeshId || null);
+      }
+    } catch (err) { void err; }
+  }, [sceneInstances, currentSceneId, selectedIds, selectedMeshId]);
 
   const toggleAxes = () => {
     const next = !axesVisible;
@@ -200,6 +362,18 @@ export default function App() {
     const inst = getCurrentInstance();
     if (inst) inst.setAxesVisible(next);
   };
+
+  const handleViewportToolChange = useCallback((mode) => {
+    const next = String(mode || "select");
+    setViewportTool(next);
+
+    const inst = getCurrentInstance();
+    if (!runtimeMode && (next === "move" || next === "rotate" || next === "scale")) {
+      if (!gizmoVisible) setGizmoVisible(true);
+      try { if (inst && typeof inst.setGizmoVisible === "function") inst.setGizmoVisible(true); } catch (err) { void err; }
+    }
+    try { if (inst && typeof inst.setViewportToolMode === "function") inst.setViewportToolMode(next); } catch (err) { void err; }
+  }, [runtimeMode, gizmoVisible, sceneInstances, currentSceneId]);
 
   const toggleGizmo = () => {
     if (runtimeMode) return;
@@ -246,6 +420,7 @@ export default function App() {
       prev.detachAndShutdown();
     }
     setSelectedMeshId(null);
+    setSelectedIds(new Set());
     setCurrentSceneId(id);
   };
 
@@ -295,11 +470,8 @@ export default function App() {
 
     setTimeout(() => {
       const i = getCurrentInstance();
-      if (i) {
-        i.highlightMesh(id);
-      }
-      setSelectedMeshId(id);
-      forceRerender((n) => n + 1);
+      if (i && typeof i.setHighlightedMeshes === "function") i.setHighlightedMeshes([id], id);
+      applySelectionToCurrent([id], id);
     }, 60);
   };
 
@@ -334,8 +506,7 @@ export default function App() {
     redoStack.current.length = 0;
 
     // clear selection and select the new group
-    setSelectedIds(new Set());
-    setSelectedMeshId(id);
+    applySelectionToCurrent([id], id);
     setTimeout(() => forceRerender(n => n + 1), 60);
   };
 
@@ -370,11 +541,10 @@ export default function App() {
     });
     redoStack.current.length = 0;
 
-    setSelectedIds(new Set([id]));
-    setSelectedMeshId(id);
+    applySelectionToCurrent([id], id);
     setTimeout(() => {
       const i = getCurrentInstance();
-      if (i) i.highlightMesh(id);
+      if (i && typeof i.setHighlightedMeshes === "function") i.setHighlightedMeshes([id], id);
       forceRerender((n) => n + 1);
     }, 60);
   };
@@ -383,8 +553,7 @@ export default function App() {
     const inst = getCurrentInstance();
     if (!inst || !id) return;
     inst.enqueueCommand({ type: "ungroup", payload: { id } });
-    setSelectedMeshId(null);
-    setSelectedIds(new Set());
+    applySelectionToCurrent([], null);
     setTimeout(() => forceRerender((n) => n + 1), 40);
   };
 
@@ -392,8 +561,7 @@ export default function App() {
     const inst = getCurrentInstance();
     if (!inst) return;
     inst.enqueueCommand({ type: "splitMerged", payload: { id } });
-    setSelectedMeshId(null);
-    setSelectedIds(new Set());
+    applySelectionToCurrent([], null);
     setTimeout(() => forceRerender(n => n + 1), 30);
     // optionally push undo/redo if desired
   };
@@ -402,14 +570,36 @@ export default function App() {
     const inst = getCurrentInstance();
     if (!inst) return;
     const meta = inst.getMeta ? inst.getMeta(id) : null;
+    const metas = inst.getMeshMetaList ? inst.getMeshMetaList() : [];
+    const byParent = new Map();
+    const byId = new Map();
+    for (const item of metas) {
+      byId.set(item.id, item);
+      const parentId = item.parent || null;
+      if (!parentId) continue;
+      if (!byParent.has(parentId)) byParent.set(parentId, []);
+      byParent.get(parentId).push(item.id);
+    }
+    const subtree = [];
+    const visit = (meshId) => {
+      const current = byId.get(meshId);
+      if (!current) return;
+      subtree.push(current);
+      for (const childId of byParent.get(meshId) || []) visit(childId);
+    };
+    visit(id);
+
     inst.enqueueCommand({ type: "removeMesh", payload: { id } });
-    setSelectedMeshId(null);
+    applySelectionToCurrent([], null);
 
     if (meta) {
       undoStack.current.push({
         undo: () => {
           const i = getCurrentInstance();
-          if (i) i.enqueueCommand({ type: "createMesh", payload: { ...meta } });
+          if (!i) return;
+          for (const item of subtree) {
+            i.enqueueCommand({ type: "createMesh", payload: { ...item } });
+          }
         },
         redo: () => {
           const i = getCurrentInstance();
@@ -422,67 +612,24 @@ export default function App() {
     setTimeout(() => forceRerender((n) => n + 1), 40);
   };
 
-  const _buildPreorderIds = (meshes = []) => {
-    const map = new Map();
-    for (const m of meshes) map.set(m.id, { ...m, children: [] });
-    const roots = [];
-    for (const node of map.values()) {
-      if (node.parent && map.has(node.parent)) map.get(node.parent).children.push(node);
-      else roots.push(node);
-    }
-    const out = [];
-    const visit = (n) => {
-      out.push(n.id);
-      if (n.children && n.children.length) {
-        for (const c of n.children) visit(c);
-      }
-    };
-    for (const r of roots) visit(r);
-    return out;
-  };
-
   const onMeshSelect = (id, ev) => {
     if (!id) return;
+    applySelectionIntent(id, {
+      source: "list",
+      ctrlKey: !!ev?.ctrlKey,
+      metaKey: !!ev?.metaKey,
+      shiftKey: !!ev?.shiftKey,
+    });
 
-    const wantToggle = !!(ev && (ev.ctrlKey || ev.metaKey));
-    const wantRange = !!(ev && ev.shiftKey);
-
-    setSelectedMeshId(id);
-
-    if (wantRange) {
-      const anchor = selectionAnchorIdRef.current;
-      const order = _buildPreorderIds(meshListRef.current || []);
-      const aIdx = anchor ? order.indexOf(anchor) : -1;
-      const bIdx = order.indexOf(id);
-      if (aIdx >= 0 && bIdx >= 0) {
-        const lo = Math.min(aIdx, bIdx);
-        const hi = Math.max(aIdx, bIdx);
-        const slice = order.slice(lo, hi + 1);
-        setSelectedIds(prev => {
-          const base = wantToggle ? new Set(prev) : new Set();
-          for (const sid of slice) base.add(sid);
-          return base;
-        });
-      } else {
-        // no valid anchor/order: fallback to single selection
-        setSelectedIds(new Set([id]));
+    // Ctrl + left-click: frame the mesh in the viewport (also works while preserving selection)
+    try {
+      if (ev && ev.ctrlKey) {
+        const inst = getCurrentInstance();
+        if (inst && typeof inst.frameMesh === 'function') {
+          inst.frameMesh(id);
+        }
       }
-    } else if (wantToggle) {
-      setSelectedIds(prev => {
-        const next = new Set(prev);
-        if (next.has(id)) next.delete(id);
-        else next.add(id);
-        return next;
-      });
-      selectionAnchorIdRef.current = id;
-    } else {
-      setSelectedIds(new Set([id]));
-      selectionAnchorIdRef.current = id;
-    }
-
-    const inst = getCurrentInstance();
-    if (inst) inst.highlightMesh(id);
-    forceRerender((n) => n + 1);
+    } catch (err) { void err; }
   };
 
   const openMeshContextMenu = (meshId, ev) => {
@@ -659,6 +806,14 @@ export default function App() {
         if (selectedMeshId) {
           deleteMeshFromScene(selectedMeshId);
         }
+      } else if (e.key === 'f' || e.key === 'F') {
+        if (!selectedMeshId) return;
+        const inst = getCurrentInstance();
+        if (!inst || typeof inst.frameMesh !== 'function') return;
+        try {
+          inst.frameMesh(selectedMeshId);
+          e.preventDefault();
+        } catch (err) { void err; }
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
         e.preventDefault();
         undo();
@@ -677,7 +832,6 @@ export default function App() {
     const inst = getCurrentInstance();
     if (inst) inst.setGridVisible(next);
   };
-
   const canToggleRuntime = !!currentSceneId;
 
   const toggleRuntimeMode = () => {
@@ -693,7 +847,6 @@ export default function App() {
   const currentScene = scenes.find((s) => s.id === currentSceneId);
   const currentInstance = sceneInstances.get(currentSceneId);
   const meshList = currentInstance ? currentInstance.getMeshMetaList() : currentScene?.json?.meshes || [];
-  meshListRef.current = meshList || [];
   const selectedMeshMeta = meshList ? meshList.find((m) => m.id === selectedMeshId) : null;
   const scriptEditorMeshMeta = meshList ? meshList.find((m) => m.id === scriptEditorMeshId) : null;
   const meshPropsMeta = meshList ? meshList.find((m) => m.id === meshPropsId) : null;
@@ -705,6 +858,10 @@ export default function App() {
   const [importTarget, setImportTarget] = useState("new"); // 'new' | 'replace'
   const [importDebug, setImportDebug] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
+
+  useEffect(() => {
+    meshListRef.current = meshList || [];
+  }, [meshList]);
 
   // If scene is cleared/unselected, force runtime off and cancel placement.
   useEffect(() => {
@@ -720,16 +877,22 @@ export default function App() {
   }, [currentSceneId]);
 
   const fileInputRef = useRef(null);
+  const modelFileInputRef = useRef(null);
+  const modelObjectUrlsRef = useRef(new Set());
 
   // Script engine (Worker) shared across scenes.
-  const scriptEngineRef = useRef(null);
   useEffect(() => {
-    scriptEngineRef.current = new ScriptEngine({ timeoutMs: 800 });
+    const modelObjectUrls = modelObjectUrlsRef.current;
     return () => {
-      try { scriptEngineRef.current?.dispose(); } catch (err) { void err; }
-      scriptEngineRef.current = null;
+      try { scriptEngine?.dispose(); } catch (err) { void err; }
+      try {
+        for (const url of modelObjectUrls) {
+          try { URL.revokeObjectURL(url); } catch (err) { void err; }
+        }
+        modelObjectUrls.clear();
+      } catch (err) { void err; }
     };
-  }, []);
+  }, [scriptEngine]);
 
   // WASM demo: load once on app start.
   useEffect(() => {
@@ -759,7 +922,7 @@ export default function App() {
   useEffect(() => {
     if (!runtimeMode) return;
     const inst = currentInstance;
-    const engine = scriptEngineRef.current;
+    const engine = scriptEngine;
     if (!inst || !engine) return;
 
     const endpoint = import.meta.env.VITE_DATA_ENDPOINT || "/api/data";
@@ -783,13 +946,71 @@ export default function App() {
       cancelled = true;
       clearInterval(t);
     };
-  }, [runtimeMode, currentSceneId, currentInstance]);
+  }, [runtimeMode, currentSceneId, currentInstance, scriptEngine]);
 
   const triggerImport = () => {
     if (fileInputRef.current) {
       fileInputRef.current.value = null;
       fileInputRef.current.click();
     }
+  };
+
+  const triggerModelImport = () => {
+    if (!currentSceneId) {
+      alert("먼저 씬을 생성하거나 선택하세요.");
+      return;
+    }
+    if (runtimeMode) {
+      alert("Runtime 모드에서는 모델 import를 할 수 없습니다.");
+      return;
+    }
+    if (modelFileInputRef.current) {
+      modelFileInputRef.current.value = null;
+      modelFileInputRef.current.click();
+    }
+  };
+
+  const handleModelFileImport = (ev) => {
+    const file = ev.target.files && ev.target.files[0];
+    if (!file) return;
+
+    const inst = getCurrentInstance();
+    if (!inst || typeof inst.importModel !== "function") {
+      alert("현재 씬이 아직 준비되지 않았습니다. 잠시 후 다시 시도하세요.");
+      return;
+    }
+
+    const lowerName = String(file.name || "").toLowerCase();
+    const extMatch = lowerName.match(/\.(glb|gltf|obj)$/i);
+    if (!extMatch) {
+      alert("GLB, GLTF, OBJ 파일만 현재 바로 불러올 수 있습니다.");
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(file);
+    modelObjectUrlsRef.current.add(objectUrl);
+
+    const modelName = (file.name || "model").replace(/\.[^/.]+$/, "") || "model";
+    const id = inst.importModel(
+      {
+        url: objectUrl,
+        fileName: file.name,
+        extension: `.${extMatch[1].toLowerCase()}`,
+      },
+      {
+        name: modelName,
+        fileName: file.name,
+      }
+    );
+
+    setTimeout(() => {
+      const current = getCurrentInstance();
+      if (current && typeof current.setHighlightedMeshes === "function") {
+        current.setHighlightedMeshes([id], id);
+      }
+      applySelectionToCurrent([id], id);
+      forceRerender((n) => n + 1);
+    }, 80);
   };
 
   const handleImportFile = (ev) => {
@@ -947,6 +1168,7 @@ export default function App() {
         gizmoVisible={gizmoVisible}
         onShowShortcuts={() => setShowShortcuts(true)}
         onShowHelp={() => setShowHelp(true)}
+        onShowTools={() => setShowTools(true)}
         runtimeMode={runtimeMode}
         onToggleRuntimeMode={toggleRuntimeMode}
         runtimeDisabled={!canToggleRuntime}
@@ -954,6 +1176,38 @@ export default function App() {
         onToggleTheme={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
         lang={lang}
         onToggleLang={() => setLang((p) => (p === LANGS.ko ? LANGS.en : LANGS.ko))}
+        t={t}
+      />
+
+      {/* Tools modal */}
+      <Tools open={showTools} onClose={() => setShowTools(false)} getInstance={getCurrentInstance} t={t} />
+
+      <ViewPresetBar
+        disabled={!getCurrentInstance()}
+        headerVisible={sceneHeaderVisible}
+        snapEnabled={snapEnabled}
+        snapMove={snapMove}
+        onToggleSnap={() => setSnapEnabled((v) => !v)}
+        onChangeSnapMove={(v) => setSnapMove(v)}
+        onUndo={undo}
+        onRedo={redo}
+        onToggleGrid={toggleGrid}
+        gridVisible={gridVisible}
+        onToggleAxes={toggleAxes}
+        axesVisible={axesVisible}
+        onSetView={(view) => {
+          const inst = getCurrentInstance();
+          try {
+            if (inst && typeof inst.setViewPreset === "function") inst.setViewPreset(view);
+          } catch (err) {
+            void err;
+          }
+        }}
+        onFrame={() => {
+          if (!selectedMeshId) return;
+          const inst = getCurrentInstance();
+          try { if (inst && typeof inst.frameMesh === "function") inst.frameMesh(selectedMeshId); } catch (err) { void err; }
+        }}
         t={t}
       />
 
@@ -1022,6 +1276,7 @@ export default function App() {
       />
 
       <input ref={fileInputRef} type="file" accept="application/json" style={{ display: "none" }} onChange={handleImportFile} />
+      <input ref={modelFileInputRef} type="file" accept=".glb,.gltf,.obj,model/gltf-binary,model/gltf+json" style={{ display: "none" }} onChange={handleModelFileImport} />
       <div className="app-body">
         {isDragOver && (
           <div className="overlay" style={{ zIndex: 60, pointerEvents: "none" }}>
@@ -1076,6 +1331,7 @@ export default function App() {
                   <tr><td style={{ padding: 8 }}>PageUp / PageDown</td><td style={{ padding: 8 }}>Move selected mesh along Y axis (up / down)</td></tr>
                   <tr><td style={{ padding: 8 }}>Shift + Arrow</td><td style={{ padding: 8 }}>Fine movement (small step)</td></tr>
                   <tr><td style={{ padding: 8 }}>Alt + Arrow</td><td style={{ padding: 8 }}>Large step movement</td></tr>
+                  <tr><td style={{ padding: 8 }}>F</td><td style={{ padding: 8 }}>Focus selected mesh</td></tr>
                   <tr><td style={{ padding: 8 }}>Delete / Backspace</td><td style={{ padding: 8 }}>Delete selected mesh</td></tr>
                   <tr><td style={{ padding: 8 }}>Ctrl/Cmd + Z</td><td style={{ padding: 8 }}>Undo</td></tr>
                   <tr><td style={{ padding: 8 }}>Ctrl/Cmd + Y or Shift+Ctrl/Cmd + Z</td><td style={{ padding: 8 }}>Redo</td></tr>
@@ -1181,9 +1437,35 @@ export default function App() {
 
                         <MeshPrimitivesToolbar
                           onAdd={(kind) => {
+                            if (kind === 'gui') {
+                              try {
+                                const inst = sceneInstances.get(currentSceneId);
+                                if (!inst) return;
+                                const sel = selectedMeshIdRef.current;
+                                if (sel) {
+                                  try { if (typeof inst.addGuiPanelLinked === 'function') inst.addGuiPanelLinked(sel, { title: 'Linked GUI' }); } catch (err) { void err; }
+                                } else {
+                                  try { if (typeof inst.addGuiPanelOverlay === 'function') inst.addGuiPanelOverlay({ title: 'Overlay GUI' }); } catch (err) { void err; }
+                                }
+                              } catch (err) { void err; }
+                              return;
+                            }
                             setArmedCreateKind((prev) => (prev === kind ? null : kind));
                           }}
                         />
+
+                        <div className="mesh-import-card">
+                          <button
+                            className="mesh-import-btn"
+                            type="button"
+                            onClick={triggerModelImport}
+                            disabled={!currentSceneId}
+                            title={t("panel.importModel")}
+                          >
+                            {t("panel.importModel")}
+                          </button>
+                          <div className="mesh-import-hint">{t("panel.importModelHint")}</div>
+                        </div>
                       </div>
 
                       <div className="mesh-section mesh-section-fill">
@@ -1223,14 +1505,14 @@ export default function App() {
               sceneMeta={{ id: currentSceneId, name: currentScene?.name }}
               initialJSON={currentScene?.json}
               onReady={handleSceneReady}
-              onToggleGrid={toggleGrid}
-              gridVisible={gridVisible}
-              onToggleAxes={toggleAxes}
-              axesVisible={axesVisible}
-              onUndo={undo}
-              onRedo={redo}
-              headerVisible={sceneHeaderVisible && !runtimeMode}
               runtimeMode={runtimeMode}
+              toolMode={viewportTool}
+              onToolModeChange={handleViewportToolChange}
+              onBoxSelect={applyBoxSelection}
+              snapEnabled={snapEnabled}
+              snapMove={snapMove}
+              onToggleSnap={() => setSnapEnabled((v) => !v)}
+              onChangeSnapMove={(v) => setSnapMove(v)}
               placementKind={armedCreateKind}
               t={t}
               onCommitPlacement={(point) => {
@@ -1249,17 +1531,26 @@ export default function App() {
           <aside className="inspector-panel">
             <div className="inspector-title">{t("inspector.title")}</div>
             <div className="inspector-content">
-              <MeshInspector
-                key={selectedMeshId || "none"}
-                meshMeta={selectedMeshMeta}
-                meshes={meshList || []}
-                onChange={onInspectorChange}
-                onDelete={(id) => { deleteMeshFromScene(id); }}
-                onUnmerge={onUnmerge}
-                runtimeMode={runtimeMode}
-                onOpenScript={(id) => openScriptEditor(id)}
-                t={t}
-              />
+                {selectedGuiPanelId ? (
+                  <GuiPanelInspector
+                    key={selectedGuiPanelId}
+                    sp={sceneInstances.get(currentSceneId)}
+                    panelId={selectedGuiPanelId}
+                    onClose={() => { setSelectedGuiPanelId(null); }}
+                  />
+                ) : (
+                  <MeshInspector
+                    key={selectedMeshId || "none"}
+                    meshMeta={selectedMeshMeta}
+                    meshes={meshList || []}
+                    onChange={onInspectorChange}
+                    onDelete={(id) => { deleteMeshFromScene(id); }}
+                    onUnmerge={onUnmerge}
+                    runtimeMode={runtimeMode}
+                    onOpenScript={(id) => openScriptEditor(id)}
+                    t={t}
+                  />
+                )}
             </div>
           </aside>
         )}

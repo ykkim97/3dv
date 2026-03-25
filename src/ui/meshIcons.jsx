@@ -76,3 +76,44 @@ export function TextBoxIcon(props) {
     </svg>
   );
 }
+
+export function PlaneIcon(props) {
+  return (
+    <svg className="svg" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden {...props}>
+      <rect x="3" y="7" width="18" height="10" rx="0.5" stroke="currentColor" fill="none" strokeWidth="1.2" />
+    </svg>
+  );
+}
+
+export function ArrowIcon(props) {
+  return (
+    <svg className="svg" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden {...props}>
+      <path d="M4 12h12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      <path d="M14 6l6 6-6 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+    </svg>
+  );
+}
+
+export function DomeIcon(props) {
+  return (
+    <svg className="svg" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden {...props}>
+      <path d="M2 15a10 10 0 0 1 20 0H2z" fill="currentColor" />
+    </svg>
+  );
+}
+
+export function CapsuleIcon(props) {
+  return (
+    <svg className="svg" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden {...props}>
+      <rect x="6" y="4" width="12" height="16" rx="6" stroke="currentColor" fill="none" strokeWidth="1.2" />
+    </svg>
+  );
+}
+
+export function TubeIcon(props) {
+  return (
+    <svg className="svg" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden {...props}>
+      <path d="M3 12c3-4 9-6 18-2" stroke="currentColor" strokeWidth="1.4" fill="none" />
+    </svg>
+  );
+}

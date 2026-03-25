@@ -80,3 +80,71 @@ button:focus-visible {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent);
   border-color: color-mix(in srgb, var(--accent) 28%, transparent);
 }
+
+/* Tooltip styles */
+.tooltip-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.tooltip-bubble {
+  position: absolute;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(6px) scale(0.98);
+  transition: opacity 120ms ease, transform 120ms ease;
+  background: linear-gradient(180deg, rgba(20,20,24,0.98), rgba(10,10,14,0.98));
+  color: var(--text);
+  padding: 6px 9px;
+  border-radius: 8px;
+  font-size: 12px;
+  white-space: nowrap;
+  z-index: 3000;
+  box-shadow: 0 6px 18px rgba(2,6,23,0.6);
+  border: 1px solid rgba(255,255,255,0.04);
+}
+
+.tooltip-bubble.visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.tooltip-top { bottom: 100%; left: 50%; transform-origin: center bottom; margin-bottom: 8px; transform: translateX(-50%) translateY(6px) scale(0.98); }
+.tooltip-bottom { top: 100%; left: 50%; transform-origin: center top; margin-top: 8px; transform: translateX(-50%) translateY(-6px) scale(0.98); }
+.tooltip-left { right: 100%; top: 50%; transform-origin: right center; margin-right: 8px; transform: translateY(-50%) translateX(6px) scale(0.98); }
+.tooltip-right { left: 100%; top: 50%; transform-origin: left center; margin-left: 8px; transform: translateY(-50%) translateX(-6px) scale(0.98); }
+
+.tooltip-bubble::after {
+  content: "";
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  transform: rotate(45deg);
+  background: inherit;
+  border-left: 1px solid rgba(255,255,255,0.04);
+  border-top: 1px solid rgba(255,255,255,0.04);
+}
+
+.tooltip-top::after { left: 50%; bottom: -5px; transform: translateX(-50%) rotate(45deg); }
+.tooltip-bottom::after { left: 50%; top: -5px; transform: translateX(-50%) rotate(45deg); }
+.tooltip-left::after { right: -5px; top: 50%; transform: translateY(-50%) rotate(45deg); }
+.tooltip-right::after { left: -5px; top: 50%; transform: translateY(-50%) rotate(45deg); }
+
+/* Global tooltip used by tooltip manager (positioned on body) */
+.global-tooltip {
+  position: fixed;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(6px) scale(0.98);
+  transition: opacity 120ms ease, transform 120ms ease;
+  background: linear-gradient(180deg, rgba(20,20,24,0.98), rgba(10,10,14,0.98));
+  color: var(--text);
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  white-space: nowrap;
+  z-index: 99999;
+  box-shadow: 0 6px 24px rgba(2,6,23,0.7);
+  border: 1px solid rgba(255,255,255,0.04);
+}
+.global-tooltip.visible { opacity: 1; transform: translateY(0) scale(1); }

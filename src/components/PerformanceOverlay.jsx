@@ -37,7 +37,20 @@ export default function PerformanceOverlay({ sp }) {
         let drawCalls = 0;
         try { drawCalls = toNumber(engine && (engine.drawCalls || engine._drawCalls || engine._perfDrawCalls || 0)); } catch { drawCalls = 0; }
 
-        if (mounted) setStats({ fps, meshes, active, materials, drawCalls });
+        if (mounted) {
+          setStats((prev) => {
+            if (
+              prev.fps === fps &&
+              prev.meshes === meshes &&
+              prev.active === active &&
+              prev.materials === materials &&
+              prev.drawCalls === drawCalls
+            ) {
+              return prev;
+            }
+            return { fps, meshes, active, materials, drawCalls };
+          });
+        }
       } catch { void 0; }
       raf = requestAnimationFrame(update);
     };

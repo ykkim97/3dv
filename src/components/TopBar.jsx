@@ -1,6 +1,6 @@
 // src/components/TopBar.jsx
 
-export default function TopBar({ onToggleGrid, gridVisible, onToggleHeader, headerVisible, onImport, onToggleGizmo, gizmoVisible, onShowShortcuts, onShowHelp, runtimeMode, onToggleRuntimeMode, runtimeDisabled = false, theme = "dark", onToggleTheme, lang = "ko", onToggleLang, t = (s) => s }) {
+export default function TopBar({ onToggleGrid, gridVisible, onToggleHeader, headerVisible, onImport, onToggleGizmo, gizmoVisible, onShowShortcuts, onShowHelp, onShowTools, runtimeMode, onToggleRuntimeMode, runtimeDisabled = false, theme = "dark", onToggleTheme, lang = "ko", onToggleLang, t = (s) => s }) {
   return (
     <header className="topbar">
       <div className="topbar-left">
@@ -13,6 +13,7 @@ export default function TopBar({ onToggleGrid, gridVisible, onToggleHeader, head
           <button className="topbar-menu-btn" type="button">File</button>
           <button className="topbar-menu-btn" type="button">Edit</button>
           <button className="topbar-menu-btn" type="button" onClick={() => onShowHelp && onShowHelp()}>{t("topbar.help")}</button>
+          <button id="topbar-tools-btn" className="topbar-menu-btn" type="button" onClick={() => onShowTools && onShowTools()}>Tools</button>
         </nav>
       </div>
 

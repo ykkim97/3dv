@@ -13,9 +13,9 @@ function buildTree(meshes = []) {
 
 function KindIcon({ kind }) {
   const base = {
-    width: 5,
-    height: 5,
-    marginRight: 4,
+    width: 3,
+    height: 3,
+    marginRight: 2,
     borderRadius: 999,
     display: "inline-block",
   };
@@ -30,6 +30,7 @@ function KindIcon({ kind }) {
     torus: "var(--accent-2)",
     textbox: "rgba(255,255,255,0.65)",
     merged: "rgba(255,255,255,0.4)",
+    model: "#5bc0be",
     group: "rgba(255,255,255,0.35)"
   };
 
@@ -49,7 +50,7 @@ function TreeItem({ node, level = 0, onSelect, selectedId, onDelete, onContextMe
   const isExpanded = expandedIds.has(node.id);
   const isMultiSelected = selectedIdsSet && selectedIdsSet.has(node.id);
   const isGroup = node.kind === "group";
-  const indent = level * 12;
+    const indent = level * 5;
 
   const handleDragStart = (e) => {
     try {
@@ -110,15 +111,13 @@ function TreeItem({ node, level = 0, onSelect, selectedId, onDelete, onContextMe
         onKeyDown={(e) => { if (e.key === "Enter") handleClick(e); }}
         aria-pressed={isSelected}
         style={{
-          padding: "0px 6px",
-          height: 14,
-          minHeight: 14,
-          lineHeight: "14px",
-          fontSize: 10.5,
+          padding: "1px 4px",
+          minHeight: 10,
+          fontSize: 9,
           display: "flex",
           alignItems: "center",
-          gap: 4,
-          borderRadius: 8,
+          gap: 2,
+          borderRadius: 4,
           background:
             isSelected
               ? "linear-gradient(90deg, rgba(80,120,255,0.14), rgba(80,120,255,0.04))"
@@ -139,7 +138,7 @@ function TreeItem({ node, level = 0, onSelect, selectedId, onDelete, onContextMe
       >
         {level > 0 ? <span className="tree-hline" aria-hidden /> : null}
 
-        <div style={{ width: 18, textAlign: "center", fontSize: 12 }}>
+        <div style={{ width: 12, textAlign: "center", fontSize: 10 }}>
           {node.children && node.children.length ? (
             <button
               onClick={(e) => { e.stopPropagation(); toggleExpand(node.id, level); }}
@@ -166,12 +165,12 @@ function TreeItem({ node, level = 0, onSelect, selectedId, onDelete, onContextMe
         <KindIcon kind={node.kind} />
 
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div className="mesh-name" style={{ fontWeight: 800, fontSize: 13, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          <div title={node.name || node.id} className="mesh-name" style={{ fontWeight: 600, fontSize: 10, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
             {node.name || node.id}
           </div>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
           <button
             onClick={(e) => { e.stopPropagation(); if (onDelete) onDelete(node.id); }}
             className="mesh-delete-btn"
@@ -181,11 +180,11 @@ function TreeItem({ node, level = 0, onSelect, selectedId, onDelete, onContextMe
               background: "transparent",
               border: "none",
               color: "var(--warn)",
-              padding: "6px",
-              borderRadius: 6,
+              padding: "1px",
+              borderRadius: 4,
               cursor: "pointer",
               fontWeight: 700,
-              fontSize: 13,
+              fontSize: 10,
               lineHeight: 1
             }}
           >
@@ -200,8 +199,8 @@ function TreeItem({ node, level = 0, onSelect, selectedId, onDelete, onContextMe
           style={{
             marginTop: 6,
             borderLeft: "1px solid rgba(255,255,255,0.05)",
-            marginLeft: 10,
-            paddingLeft: 10
+            marginLeft: 6,
+            paddingLeft: 6
           }}
         >
           {node.children.map(child => (

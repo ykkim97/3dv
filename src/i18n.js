@@ -22,10 +22,29 @@ export const STRINGS = {
     "topbar.themeToDark": "다크 모드로 전환",
     "topbar.lang": "언어",
 
+    // View preset bar
+    "viewbar.aria": "시점 전환",
+    "viewbar.front": "정면",
+    "viewbar.top": "윗면",
+    "viewbar.bottom": "아랫면",
+    "viewbar.left": "좌측",
+    "viewbar.right": "우측",
+    "viewbar.iso": "3D",
+    "viewbar.frame": "Frame",
+
+    // Snap
+    "snap.title": "Snap 설정",
+    "snap.toggle": "Snap",
+    "snap.move": "이동 스냅",
+    "snap.rotate": "회전 스냅",
+    "snap.scale": "스케일 스냅",
+
     // Panels
     "panel.scenes": "Scenes",
     "panel.meshes": "Meshes",
     "panel.addPrimitives": "도형 추가",
+    "panel.importModel": "모델 가져오기",
+    "panel.importModelHint": "GLB / GLTF / OBJ 파일을 현재 씬에 추가합니다",
     "panel.meshTree": "메쉬 트리",
 
     // Empty states
@@ -75,10 +94,29 @@ export const STRINGS = {
     "topbar.themeToDark": "Switch to dark mode",
     "topbar.lang": "Language",
 
+    // View preset bar
+    "viewbar.aria": "View presets",
+    "viewbar.front": "Front",
+    "viewbar.top": "Top",
+    "viewbar.bottom": "Bottom",
+    "viewbar.left": "Left",
+    "viewbar.right": "Right",
+    "viewbar.iso": "3D",
+    "viewbar.frame": "Frame",
+
+    // Snap
+    "snap.title": "Snap settings",
+    "snap.toggle": "Snap",
+    "snap.move": "Move snap",
+    "snap.rotate": "Rotate snap",
+    "snap.scale": "Scale snap",
+
     // Panels
     "panel.scenes": "Scenes",
     "panel.meshes": "Meshes",
     "panel.addPrimitives": "Add primitives",
+    "panel.importModel": "Import model",
+    "panel.importModelHint": "Add a GLB / GLTF / OBJ file into the current scene",
     "panel.meshTree": "Mesh tree",
 
     // Empty states

@@ -29,6 +29,141 @@
   min-width: 0;
 }
 
+.viewport-mode-toolbar {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px;
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(16, 18, 24, 0.92), rgba(10, 12, 18, 0.86));
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow: 0 12px 28px rgba(0,0,0,0.24);
+  backdrop-filter: blur(10px);
+}
+
+.viewport-snap-panel {
+  display: none;
+  width: 100%;
+  padding-top: 2px;
+}
+
+.viewport-snap-panel.active {
+  display: grid;
+  gap: 4px;
+}
+
+.viewport-snap-label {
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-align: center;
+  color: var(--muted);
+}
+
+.viewport-snap-select {
+  width: 100%;
+  height: 24px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.04);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.viewport-mode-btn {
+  width: 36px;
+  height: 36px;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px;
+  background: rgba(255,255,255,0.03);
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  cursor: pointer;
+  transition: transform 120ms ease, background 120ms ease, border-color 120ms ease;
+}
+
+.viewport-mode-btn:hover {
+  transform: translateY(-1px);
+  background: rgba(255,255,255,0.06);
+}
+
+.viewport-mode-btn.active {
+  background: linear-gradient(180deg, rgba(74, 163, 255, 0.28), rgba(74, 163, 255, 0.12));
+  border-color: rgba(116, 190, 255, 0.7);
+  box-shadow: inset 0 0 0 1px rgba(162, 216, 255, 0.18), 0 10px 20px rgba(42, 110, 255, 0.16);
+}
+
+.viewport-mode-btn-snap.active {
+  background: linear-gradient(180deg, rgba(255, 185, 72, 0.28), rgba(255, 185, 72, 0.12));
+  border-color: rgba(255, 205, 118, 0.72);
+  box-shadow: inset 0 0 0 1px rgba(255, 223, 167, 0.16), 0 10px 18px rgba(255, 170, 62, 0.16);
+}
+
+.viewport-mode-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.viewport-mode-btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.viewport-mode-btn-key {
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  opacity: 0.78;
+}
+
+.viewport-selection-box {
+  position: absolute;
+  z-index: 35;
+  pointer-events: none;
+  border: 1px solid rgba(103, 188, 255, 0.95);
+  background: rgba(74, 163, 255, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);
+}
+
+.viewport-measure-overlay {
+  position: absolute;
+  top: 10px;
+  left: 66px;
+  z-index: 39;
+  min-width: 132px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(14, 16, 20, 0.86);
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow: 0 10px 26px rgba(0,0,0,0.24);
+  backdrop-filter: blur(8px);
+}
+
+.viewport-measure-title {
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+}
+
+.viewport-measure-value {
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text);
+}
+
 .inspector-panel {
   width: 320px;
   background: var(--panel);
@@ -131,16 +266,166 @@
   border-bottom: 1px solid var(--border);
 }
 
+/* Thin view preset bar (under Topbar) */
+.viewbar {
+  height: 32px;
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+
+.viewbar-inner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.viewbar-btn {
+  padding: 5px 10px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.05);
+  font-weight: 800;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.viewbar-btn:hover {
+  background: rgba(255,255,255,0.03);
+}
+
+.viewbar-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.viewbar-btn:disabled:hover {
+  background: rgba(255,255,255,0.02);
+}
+
+.viewbar-btn.active {
+  background: rgba(255,255,255,0.02);
+  box-shadow: inset 0 0 0 1px var(--accent);
+  border-color: rgba(255,255,255,0.06);
+}
+
+.viewbar-divider {
+  width: 1px;
+  height: 18px;
+  background: rgba(255,255,255,0.06);
+  margin: 0 4px;
+}
+
+.viewbar-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 2px;
+}
+
+.viewbar-field-label {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--muted);
+}
+
+.viewbar-select {
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.05);
+  background: rgba(255,255,255,0.02);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.viewbar-select:disabled {
+  opacity: 0.5;
+}
+
+/* Custom cursors: fancy pointer and grab */
+:root {
+  /* small white pointer with subtle outline */
+  --cursor-fancy: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28"><g fill="none" fill-rule="evenodd"><path d="M2 2 L18 12 L10 14 L12 18 L6 20 Z" fill="%23ffffff" stroke="%23000000" stroke-opacity="0.18" stroke-width="1"/></g></svg>') 6 4, auto;
+  /* grab hand */
+  --cursor-grab: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28"><path d="M8 10c0-1.657 1.343-3 3-3s3 1.343 3 3v5h-6v-5z" fill="%23222"/><rect x="6" y="15" width="12" height="2" rx="1" fill="%23222"/></svg>') 12 12, grab;
+}
+
+/* Custom cursors: polished pointer and grab */
+:root {
+  --cursor-accent: #1f6feb;
+  --cursor-fill: #222222;
+  --cursor-bg: rgba(255,255,255,0.98);
+}
+
+/* SVG pointer (data url) - elegant pointer with slight shadow */
+.app-custom-cursor, .scene-canvas, .sidebar-panel, button, .mesh-list-item {
+  cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 48 48'><defs><filter id='f' x='-50%' y='-50%' width='200%' height='200%'><feDropShadow dx='0' dy='0' stdDeviation='1.2' flood-color='%23000000' flood-opacity='0.18'/></filter></defs><g filter='url(%23f)'><path d='M6 4 L34 20 L26 22 L38 44 L30 46 L18 24 L10 32 Z' fill='%23ffffff' stroke='%23000000' stroke-opacity='0.06' stroke-width='0.5'/><path d='M6 4 L34 20 L26 22 L38 44 L30 46 L18 24 L10 32 Z' fill='%23222222' opacity='0.97' transform='translate(0,0)'/></g><circle cx='36' cy='12' r='3' fill='%231f6feb' opacity='0.95'/></svg>") 12 4, auto;
+}
+
+/* Grab cursor for dragging interactions */
+.app-custom-grab { cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 48 48'><path d='M6 24c0-6 5-10 10-10 4 0 6 3 6 6v-6c0-3 2-5 5-5s5 2 5 5v10' fill='%231f6feb' opacity='0.95'/><rect x='2' y='26' width='44' height='18' rx='3' fill='%23ffffff' stroke='%23000000' stroke-opacity='0.06'/></svg>") 24 24, grab; }
+
+/* Ensure fallback system cursors when SVG fails */
+.app-custom-cursor { cursor: pointer; }
+.app-custom-grab { cursor: grab; }
+
+/* Scopes: apply to canvas and sidebar specifically for improved polish */
+.scene-canvas { /* Babylon canvas likely gets element <canvas> — keep selector gentle */ }
+.sidebar-panel { -webkit-overflow-scrolling: touch; }
+
+/* Canvas cursor defaults and states */
+.scene-canvas { cursor: var(--cursor-fancy); }
+.scene-canvas.crosshair-mode { cursor: crosshair; }
+.scene-canvas.dragging { cursor: var(--cursor-grab) !important; }
+
+/* Remove default focus ring on the scene canvas to avoid white outline on click */
+.scene-canvas:focus,
+.scene-canvas:focus-visible,
+.center canvas:focus,
+.center canvas:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Apply to 3D canvas (scene) */
+.center canvas, .center canvas * {
+  cursor: var(--cursor-fancy);
+}
+
+/* Use grab cursor when dragging selection or interacting */
+.center canvas.dragging, .center.canvas-dragging, .center:active canvas {
+  cursor: var(--cursor-grab);
+}
+
+/* Apply to interactive UI elements for consistency */
+.viewport-mode-btn, .viewbar-btn, .topbar-menu-btn, .viewbar-select, .viewport-mode-toolbar button {
+  cursor: var(--cursor-fancy);
+}
+
+/* Sidebar and tree items */
+.sidebar-panel, .mesh-tree, .mesh-list-item {
+  cursor: var(--cursor-fancy);
+}
+
+/* fallback for text selection and inputs */
+input, textarea, select, button { cursor: auto; }
+
 /* Runtime stage: show only the 3D view (modal-like) under the topbar */
 .center.runtime-stage {
   position: fixed;
   left: 0;
   right: 0;
-  top: 46px;
+  top: 78px;
   bottom: 0;
   z-index: 150;
   width: 100vw;
-  height: calc(100vh - 46px);
+  height: calc(100vh - 78px);
 }
 
 .topbar-left {
@@ -188,6 +473,56 @@
   background: rgba(255,255,255,0.03);
   border-color: rgba(255,255,255,0.04);
 }
+
+/* Tools dropdown styling */
+.tools-dropdown {
+  position: fixed;
+  z-index: 1200;
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+  border: 1px solid rgba(255,255,255,0.04);
+  border-radius: 10px;
+  padding: 6px;
+  box-shadow: 0 12px 30px rgba(0,0,0,0.6);
+  min-width: 220px;
+  color: var(--text);
+  backdrop-filter: blur(6px) saturate(120%);
+}
+
+.tools-dropdown .tools-header {
+  font-weight: 900;
+  font-size: 13px;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.02);
+}
+
+.tools-list { display: flex; flex-direction: column; }
+
+.tools-item {
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  border-radius: 8px;
+  transition: background 120ms ease, transform 120ms ease;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.tools-item + .tools-item { margin-top: 6px; }
+
+.tools-item:hover {
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+  transform: translateY(-1px);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.02);
+}
+
+.tools-item .muted { color: var(--muted); font-weight: 600; font-size: 12px; }
+
+.tools-footer { display:flex; justify-content:flex-end; padding: 8px 6px 6px 6px; }
+.tools-close-btn { padding:6px 10px; border-radius:8px; }
 
 .topbar-right {
   display: flex;
@@ -422,6 +757,15 @@
   flex-direction: column;
   gap: 12px;
   overflow: auto;
+  overflow-x: auto;
+}
+
+/* Allow the mesh tree to expand horizontally and trigger a horizontal scrollbar in the sidebar */
+.mesh-tree {
+  display: block;
+  min-width: -webkit-max-content;
+  min-width: -moz-max-content;
+  min-width: max-content;
 }
 
 /* Panel header (title + small control group) */
@@ -568,6 +912,55 @@
 }
 .add-collection .icon-btn:hover { transform: translateY(-3px); filter: brightness(1.06); }
 
+.mesh-import-card {
+  margin-top: 10px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.02));
+}
+
+.mesh-import-btn {
+  width: 100%;
+  min-height: 42px;
+  border-radius: 12px;
+  border: 1px solid rgba(91,192,190,0.35);
+  background: linear-gradient(180deg, rgba(91,192,190,0.2), rgba(91,192,190,0.08));
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+/* Mesh list tweaks: hide delete button until hover and tighten spacing */
+.mesh-row .mesh-delete-btn {
+  opacity: 0;
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+.mesh-row:hover .mesh-delete-btn {
+  opacity: 1;
+  transform: translateY(0);
+}
+.mesh-name {
+  word-break: break-word;
+}
+.mesh-import-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(1.04);
+}
+
+.mesh-import-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.mesh-import-hint {
+  margin-top: 8px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
 /* Mesh list container */
 .mesh-list-card {
   margin-top: 6px;
@@ -589,7 +982,7 @@
 
 /* MeshList — more contrast + accordion visuals */
 .mesh-list-card {
-  padding: 6px;
+  padding: 2px;
   max-width: 100%;
   box-sizing: border-box;
   background: linear-gradient(180deg, rgba(255,255,255,0.008), rgba(255,255,255,0.006));
@@ -622,7 +1015,7 @@
 .mesh-list-card button[aria-label] { cursor: pointer; }
 
 /* compact delete button */
-.mesh-delete-btn { width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; }
+.mesh-delete-btn { width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; font-size: 10px }
 
 /* child container separator */
 .mesh-tree {
@@ -665,4 +1058,60 @@
 
 .tree-expander:hover {
   background: rgba(255,255,255,0.03);
+}
+
+/* Custom scrollbar styles for sidebar and mesh list (WebKit + Firefox) */
+.sidebar-panel,
+.mesh-list-fill {
+  scrollbar-width: thin; /* Firefox */
+  scrollbar-color: rgba(120,140,160,0.6) rgba(255,255,255,0.02); /* thumb track for Firefox */
+}
+
+/* Force select box option color across the app */
+select,
+select option,
+.viewbar-select,
+.viewport-snap-select {
+  color: #222222 !important;
+}
+
+/* WebKit browsers */
+.sidebar-panel::-webkit-scrollbar,
+.mesh-list-fill::-webkit-scrollbar,
+.mesh-tree::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.sidebar-panel::-webkit-scrollbar-track,
+.mesh-list-fill::-webkit-scrollbar-track,
+.mesh-tree::-webkit-scrollbar-track {
+  background: linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.02));
+  border-radius: 10px;
+  margin: 6px 0;
+}
+
+.sidebar-panel::-webkit-scrollbar-thumb,
+.mesh-list-fill::-webkit-scrollbar-thumb,
+.mesh-tree::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(96,130,150,0.32), rgba(56,78,96,0.22));
+  border-radius: 10px;
+  border: 2px solid rgba(0,0,0,0.25);
+  box-shadow: inset 0 2px 6px rgba(0,0,0,0.45);
+}
+
+.sidebar-panel::-webkit-scrollbar-thumb:hover,
+.mesh-list-fill::-webkit-scrollbar-thumb:hover,
+.mesh-tree::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(120,160,180,0.42), rgba(72,98,118,0.32));
+}
+
+.sidebar-panel::-webkit-scrollbar-corner,
+.mesh-list-fill::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Slight fade on horizontal scrollbar to blend with panel */
+.sidebar-panel::-webkit-scrollbar-track:horizontal {
+  background: rgba(0,0,0,0.06);
 }

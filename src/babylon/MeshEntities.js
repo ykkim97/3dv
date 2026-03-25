@@ -12,5 +12,11 @@ export { TorusMeta } from "./meshes/meta/TorusMeta";
 export { TextBoxMeta } from "./meshes/meta/TextBoxMeta";
 export { LineMeta } from "./meshes/meta/LineMeta";
 export { MergedMeta } from "./meshes/meta/MergedMeta";
+export { ModelMeta } from "./meshes/meta/ModelMeta";
+export { PlaneMeta } from "./meshes/meta/PlaneMeta";
+export { ArrowMeta } from "./meshes/meta/ArrowMeta";
+export { DomeMeta } from "./meshes/meta/DomeMeta";
+export { CapsuleMeta } from "./meshes/meta/CapsuleMeta";
+export { TubeMeta } from "./meshes/meta/TubeMeta";
 
 export { createMeta } from "./meshes/meta/createMeta";

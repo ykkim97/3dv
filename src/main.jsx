@@ -7,9 +7,13 @@ import '@fontsource/jetbrains-mono/400.css'
 import '@fontsource/jetbrains-mono/700.css'
 import './index.css'
 import App from './App.jsx'
+import initTooltipManager from './tooltipManager';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <App />
   </StrictMode>,
 )
+
+// initialize global tooltip replacement (replaces native title tooltips)
+initTooltipManager();

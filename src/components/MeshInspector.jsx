@@ -1,4 +1,5 @@
 import { useState } from "react";
+import Tooltip from "./Tooltip.jsx";
 
 function color3ToHex(c) {
   const r = Math.max(0, Math.min(255, Math.round((c.r ?? 0) * 255)));
@@ -50,15 +51,16 @@ export default function MeshInspector({ meshMeta, meshes = [], onChange, onDelet
           <div className="inspector-id">{local.id}</div>
         </div>
         <div className="inspector-actions">
-          <button
-            className="btn btn-ghost"
-            type="button"
-            onClick={() => onOpenScript && onOpenScript(local.id)}
-            disabled={runtimeMode}
-            title={runtimeMode ? "Script editing is disabled in runtime mode" : "Edit scripts"}
-          >
-            {t("inspector.script")}
-          </button>
+          <Tooltip text={runtimeMode ? "Script editing is disabled in runtime mode" : "Edit scripts"}>
+            <button
+              className="btn btn-ghost"
+              type="button"
+              onClick={() => onOpenScript && onOpenScript(local.id)}
+              disabled={runtimeMode}
+            >
+              {t("inspector.script")}
+            </button>
+          </Tooltip>
           {local.kind === "merged" && typeof onUnmerge === "function" ? (
             <button className="btn btn-primary" type="button" onClick={() => onUnmerge(local.id)}>Unmerge</button>
           ) : null}
@@ -106,23 +108,24 @@ export default function MeshInspector({ meshMeta, meshes = [], onChange, onDelet
 
         <div className="inspector-row">
           <label className="inspector-label">Material</label>
-          <select
-            className="input"
-            value={matType}
-            onChange={(e) => {
-              const next = e.target.value;
-              if (next === "pbr") {
-                apply({ material: { type: "pbr", metallic: local.material?.metallic ?? 0, roughness: local.material?.roughness ?? 0.4, alpha: local.material?.alpha ?? 1 } });
-              } else {
-                apply({ material: { type: "standard", specularPower: local.material?.specularPower ?? 64, alpha: local.material?.alpha ?? 1 } });
-              }
-            }}
-            disabled={runtimeMode}
-            title={runtimeMode ? "Disabled in runtime mode" : "Material type"}
-          >
-            <option value="standard">Standard</option>
-            <option value="pbr">PBR</option>
-          </select>
+          <Tooltip text={runtimeMode ? "Disabled in runtime mode" : "Material type"}>
+            <select
+              className="input"
+              value={matType}
+              onChange={(e) => {
+                const next = e.target.value;
+                if (next === "pbr") {
+                  apply({ material: { type: "pbr", metallic: local.material?.metallic ?? 0, roughness: local.material?.roughness ?? 0.4, alpha: local.material?.alpha ?? 1 } });
+                } else {
+                  apply({ material: { type: "standard", specularPower: local.material?.specularPower ?? 64, alpha: local.material?.alpha ?? 1 } });
+                }
+              }}
+              disabled={runtimeMode}
+            >
+              <option value="standard">Standard</option>
+              <option value="pbr">PBR</option>
+            </select>
+          </Tooltip>
         </div>
 
         {matType === "standard" ? (
