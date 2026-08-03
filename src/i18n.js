@@ -15,6 +15,7 @@ export const STRINGS = {
     // TopBar
     "topbar.help": "Help",
     "topbar.import": "Import",
+    "topbar.run": "Run",
     "topbar.runtimeDisabled": "씬을 먼저 생성/선택하세요",
     "topbar.runtimeOn": "Runtime 모드 (클릭하면 Edit로 전환)",
     "topbar.runtimeOff": "Edit 모드 (클릭하면 Run)",
@@ -87,6 +88,7 @@ export const STRINGS = {
     // TopBar
     "topbar.help": "Help",
     "topbar.import": "Import",
+    "topbar.run": "Run",
     "topbar.runtimeDisabled": "Create or select a scene first",
     "topbar.runtimeOn": "Runtime mode (click to switch to edit)",
     "topbar.runtimeOff": "Edit mode (click to run)",

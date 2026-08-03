@@ -1,0 +1,27 @@
+:root{
+  /* Neumorphism design tokens */
+  --radius: 12px;
+  --bg-0: #0f1418; /* app background */
+  --bg-1: #0b0f12; /* center background */
+  --panel: #101418; /* panel surface */
+  --panel-2: #0e1518; /* panel gradient */
+  --surface: #0d1114; /* elevated surface */
+  --text: #e6edf3;
+  --muted: #98a0ab;
+  --accent: #7c5cff; /* violet accent */
+  --warn: #ffb86b;
+  --border: rgba(255,255,255,0.04);
+
+  /* neumorphism shadows */
+  --shadow-dark: rgba(0,0,0,0.6);
+  --shadow-light: rgba(255,255,255,0.03);
+  --soft-shadow: 12px 12px 24px rgba(0,0,0,0.55), -6px -6px 14px rgba(255,255,255,0.02);
+  --soft-inset: inset 6px 6px 12px rgba(0,0,0,0.5), inset -4px -4px 8px rgba(255,255,255,0.02);
+
+  /* subtle raised look (for small controls) */
+  --control-shadow: 6px 6px 14px rgba(0,0,0,0.5), -3px -3px 8px rgba(255,255,255,0.02);
+  --control-inset: inset 4px 4px 8px rgba(0,0,0,0.45), inset -2px -2px 6px rgba(255,255,255,0.02);
+
+  /* focus rings */
+  --focus: rgba(124,92,255,0.22);
+}

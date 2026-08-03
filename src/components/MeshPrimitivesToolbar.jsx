@@ -14,7 +14,9 @@ import {
   DomeIcon,
   CapsuleIcon,
   TubeIcon,
+  ContourIcon,
 } from "../ui/meshIcons";
+import { PRIMITIVE_SHORTCUT_BY_KIND } from "../ui/primitiveShortcuts";
 import Tooltip from "./Tooltip.jsx";
 
 const ITEMS = [
@@ -31,6 +33,7 @@ const ITEMS = [
   { kind: "dome", title: "Add Dome", Icon: DomeIcon },
   { kind: "capsule", title: "Add Capsule", Icon: CapsuleIcon },
   { kind: "tube", title: "Add Tube", Icon: TubeIcon },
+  { kind: "contour", title: "Add 3D Contour Field", Icon: ContourIcon },
 ];
 
 const KIND_COLOR = {
@@ -47,13 +50,14 @@ const KIND_COLOR = {
   dome: "color-mix(in srgb, var(--accent-2) 55%, var(--text))",
   capsule: "color-mix(in srgb, var(--warn) 55%, var(--accent))",
   tube: "color-mix(in srgb, var(--muted) 65%, var(--accent-2))",
+  contour: "color-mix(in srgb, #9aff14 70%, var(--accent))",
 };
 
 export default function MeshPrimitivesToolbar({ onAdd }) {
   return (
     <div className="add-collection" role="toolbar" aria-label="Add meshes">
       {ITEMS.map((item) => (
-        <Tooltip key={item.kind} text={item.title}>
+        <Tooltip key={item.kind} text={`${item.title}${PRIMITIVE_SHORTCUT_BY_KIND[item.kind] ? ` (${PRIMITIVE_SHORTCUT_BY_KIND[item.kind]})` : ""}`}>
           <button
             type="button"
             onClick={() => onAdd(item.kind)}

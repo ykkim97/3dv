@@ -1,6 +1,7 @@
 // src/components/Tools.jsx
 import { useEffect, useState } from "react";
 import ModalShell from "./ModalShell.jsx";
+import SceneCodeModal from "./SceneCodeModal.jsx";
 import { Color4 } from "@babylonjs/core/Maths/math.color";
 
 function MenuItem({ children, onClick }) {
@@ -50,6 +51,37 @@ export default function Tools({ open, onClose, getInstance, t = (s) => s }) {
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
   }, [open, onClose]);
+
+  // Perf overlay toggle state (kept at top-level so hooks are unconditional)
+  const [perfOn, setPerfOn] = useState(() => {
+    try {
+      const v = localStorage.getItem("showPerfOverlay");
+      if (v === null) return true;
+      return v === "true";
+    } catch (e) { return true; }
+  });
+
+  useEffect(() => {
+    const onEvt = (e) => {
+      try {
+        if (typeof e.detail !== "undefined") setPerfOn(Boolean(e.detail));
+        else setPerfOn(localStorage.getItem("showPerfOverlay") !== "false");
+      } catch (err) { }
+    };
+    window.addEventListener("perfOverlayToggle", onEvt);
+    window.addEventListener("storage", onEvt);
+    return () => { window.removeEventListener("perfOverlayToggle", onEvt); window.removeEventListener("storage", onEvt); };
+  }, []);
+
+  const togglePerf = () => {
+    try {
+      const cur = localStorage.getItem("showPerfOverlay");
+      const next = (cur === "false") ? "true" : "false";
+      localStorage.setItem("showPerfOverlay", next);
+      setPerfOn(next === "true");
+      try { window.dispatchEvent(new CustomEvent("perfOverlayToggle", { detail: next === "true" })); } catch (e) { }
+    } catch (err) { console.error('Tools.jsx:togglePerf', err); }
+  };
 
   // Lighting modal
   const LightingModal = ({ open, onClose: c }) => {
@@ -156,6 +188,7 @@ export default function Tools({ open, onClose, getInstance, t = (s) => s }) {
   // Utilities modal (screenshot, scene info)
   const UtilsModal = ({ open, onClose: c }) => {
     const [sceneInfo, setSceneInfo] = useState(null);
+    const [codeOpen, setCodeOpen] = useState(false);
 
     const screenshot = () => {
       try {
@@ -192,23 +225,30 @@ export default function Tools({ open, onClose, getInstance, t = (s) => s }) {
     useEffect(() => { if (open) gather(); }, [open]);
 
     return (
-      <ModalShell open={open} title={t("tools.utils") || "Utilities"} width={520} zIndex={220} onClose={c}>
-        <div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button className="btn btn-primary" onClick={screenshot}>Screenshot</button>
-            <button className="btn" onClick={gather}>Copy Scene Info</button>
-            <button className="btn" onClick={() => { gather(); }}>Refresh</button>
-          </div>
+      <>
+        <ModalShell open={open} title={t("tools.utils") || "Utilities"} width={520} zIndex={220} onClose={c}>
+          <div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button className="btn btn-primary" onClick={screenshot}>Screenshot</button>
+              <button className="btn" onClick={gather}>Copy Scene Info</button>
+              <button className="btn" onClick={() => { gather(); }}>Refresh</button>
+              <button className="btn" onClick={() => { setCodeOpen(true); }}>Show Code</button>
+            </div>
 
-          {sceneInfo ? <pre style={{ whiteSpace: "pre-wrap", marginTop: 10, background: "rgba(255,255,255,0.02)", padding: 10, borderRadius: 6 }}>{JSON.stringify(sceneInfo, null, 2)}</pre> : null}
+            {sceneInfo ? <pre style={{ whiteSpace: "pre-wrap", marginTop: 10, background: "rgba(255,255,255,0.02)", padding: 10, borderRadius: 6 }}>{JSON.stringify(sceneInfo, null, 2)}</pre> : null}
 
-          <div className="modal-actions" style={{ marginTop: 14 }}>
-            <button className="btn" type="button" onClick={c}>Close</button>
+            <div className="modal-actions" style={{ marginTop: 14 }}>
+              <button className="btn" type="button" onClick={c}>Close</button>
+            </div>
           </div>
-        </div>
-      </ModalShell>
+        </ModalShell>
+        <SceneCodeModal open={codeOpen} getInstance={getInstance} onClose={() => setCodeOpen(false)} t={t} />
+      </>
     );
   };
+
+  // SceneCodeModal moved to its own component
+  // (import lazily where needed)
 
   // Shadows modal
   const ShadowsModal = ({ open, onClose: c }) => {
@@ -388,6 +428,7 @@ export default function Tools({ open, onClose, getInstance, t = (s) => s }) {
               <MenuItem onClick={() => setActiveTool("rendering")}>Rendering</MenuItem>
               <MenuItem onClick={() => setActiveTool("utils")}>Utilities <span className="muted">(Screenshot / Info)</span></MenuItem>
               <MenuItem onClick={() => { try { const inst = typeof getInstance === "function" ? getInstance() : null; if (inst) inst.setAxesVisible && inst.setAxesVisible(!inst.isAxesVisible()); } catch (e) {} }}>Toggle Axes</MenuItem>
+              <MenuItem onClick={() => togglePerf()}>{perfOn ? 'Hide Perf Overlay' : 'Show Perf Overlay'}</MenuItem>
             </div>
         <div className="tools-footer">
           <button className="btn tools-close-btn" onClick={onClose}>Close</button>

@@ -18,5 +18,6 @@ export { ArrowMeta } from "./meshes/meta/ArrowMeta";
 export { DomeMeta } from "./meshes/meta/DomeMeta";
 export { CapsuleMeta } from "./meshes/meta/CapsuleMeta";
 export { TubeMeta } from "./meshes/meta/TubeMeta";
+export { ContourMeta } from "./meshes/meta/ContourMeta";
 
 export { createMeta } from "./meshes/meta/createMeta";

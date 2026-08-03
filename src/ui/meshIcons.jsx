@@ -117,3 +117,15 @@ export function TubeIcon(props) {
     </svg>
   );
 }
+
+export function ContourIcon(props) {
+  return (
+    <svg className="svg" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden {...props}>
+      <path d="M4 8l8-4 8 4v8l-8 4-8-4V8Z" stroke="currentColor" strokeWidth="1.1" fill="none" />
+      <rect x="7" y="10" width="3" height="3" fill="currentColor" opacity="0.35" />
+      <rect x="11" y="8" width="3" height="3" fill="currentColor" opacity="0.72" />
+      <rect x="14.5" y="12" width="3" height="3" fill="currentColor" opacity="0.95" />
+      <rect x="9.5" y="14.5" width="3" height="3" fill="currentColor" opacity="0.55" />
+    </svg>
+  );
+}

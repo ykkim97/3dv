@@ -8,6 +8,8 @@ import MeshList from "./components/MeshList.jsx";
 import MeshPrimitivesToolbar from "./components/MeshPrimitivesToolbar.jsx";
 import SceneView from "./components/SceneView.jsx";
 import TopBar from "./components/TopBar.jsx";
+import IconButton from "./components/IconButton.jsx";
+import SceneDetailModal from "./components/SceneDetailModal";
 import ViewPresetBar from "./components/ViewPresetBar.jsx";
 import { getDemoWasm } from "./wasm/demoWasm";
 import ScriptEngine from "./runtime/ScriptEngine";
@@ -15,10 +17,12 @@ import ScriptEditorModal from "./components/ScriptEditorModal.jsx";
 import { getSceneNameError, normalizeSceneName } from "./utils/sceneName";
 import HelpModal from "./components/HelpModal.jsx";
 import Tools from "./components/Tools.jsx";
+import SceneCodeModal from "./components/SceneCodeModal.jsx";
 import MeshContextMenu from "./components/MeshContextMenu.jsx";
 import MeshPropertiesModal from "./components/MeshPropertiesModal.jsx";
 import RenameModal from "./components/RenameModal.jsx";
 import { LANGS, makeT } from "./i18n";
+import { PRIMITIVE_SHIFT_SHORTCUTS, PRIMITIVE_SHORTCUTS } from "./ui/primitiveShortcuts";
 
 function downloadJSON(obj, filename = "scene.json") {
   const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(obj, null, 2));
@@ -70,6 +74,7 @@ export default function App() {
     } catch (err) { void err; }
     return "dark";
   });
+  const [showSceneCode, setShowSceneCode] = useState(false);
 
   useEffect(() => {
     try {
@@ -77,6 +82,14 @@ export default function App() {
       localStorage.setItem("lumatrix-theme", theme);
     } catch (err) { void err; }
   }, [theme]);
+
+  // expose a global helper so TopBar's Show Code button can open the modal
+  useEffect(() => {
+    try {
+      window.__showSceneCode = () => setShowSceneCode(true);
+      return () => { try { delete window.__showSceneCode; } catch { void 0; } };
+    } catch { void 0; }
+  }, []);
 
   const [scenes, setScenes] = useState([]);
   const [currentSceneId, setCurrentSceneId] = useState(null);
@@ -88,7 +101,7 @@ export default function App() {
   const [sceneInstances, setSceneInstances] = useState(() => new Map());
   const [selectedMeshId, setSelectedMeshId] = useState(null);
   const [selectedIds, setSelectedIds] = useState(new Set());
-  const [viewportTool, setViewportTool] = useState("move");
+  const [viewportTool, setViewportTool] = useState("select");
   const [, forceRerender] = useState(0);
 
   // Multi-select helpers
@@ -118,6 +131,7 @@ export default function App() {
   // Snap (gizmo) settings
   const [snapEnabled, setSnapEnabled] = useState(false);
   const [snapMove, setSnapMove] = useState(0.5); // 0.1 / 0.5 / 1
+  const [detailScene, setDetailScene] = useState(null);
 
   // Mode: edit vs runtime
   const [runtimeMode, setRuntimeMode] = useState(false);
@@ -144,7 +158,26 @@ export default function App() {
     const err = getSceneNameError(newName);
     if (err) return;
     const id = `scene-${Date.now()}`;
-    const sceneMeta = { id, name: normalizeSceneName(newName), json: null };
+    const name = normalizeSceneName(newName);
+    const starterMesh = createMeta("box", {
+      id: `box-${Date.now()}-starter`,
+      name: "Box-001",
+      position: { x: 0, y: 0.5, z: 0 },
+      material: { color: { r: 0.35, g: 0.55, b: 1 } },
+    });
+    const sceneMeta = {
+      id,
+      name,
+      json: {
+        id,
+        name,
+        camera: null,
+        meshes: [{ ...starterMesh }],
+        createdAt: Date.now(),
+      },
+    };
+    setGridVisible(true);
+    setAxesVisible(true);
     setScenes((s) => [...s, sceneMeta]);
     setNewName("");
     setCurrentSceneId(id);
@@ -237,6 +270,17 @@ export default function App() {
     return applySelectionToCurrent(next, uniqueIds[uniqueIds.length - 1] || null);
   }, [applySelectionToCurrent]);
 
+  const selectAllMeshesInCurrentScene = useCallback(() => {
+    const inst = sceneInstances.get(currentSceneId);
+    const metas = inst && typeof inst.getMeshMetaList === "function"
+      ? inst.getMeshMetaList()
+      : (meshListRef.current || []);
+    const ids = (metas || [])
+      .filter((meta) => meta && meta.id && meta.visible !== false && meta.locked !== true && meta.kind !== "group")
+      .map((meta) => meta.id);
+    return applySelectionToCurrent(ids, ids[ids.length - 1] || null);
+  }, [applySelectionToCurrent, sceneInstances, currentSceneId]);
+
   const openScriptEditor = (meshId) => {
     if (!meshId) return;
     setScriptEditorMeshId(meshId);
@@ -291,9 +335,11 @@ export default function App() {
       // prevent camera from responding to keyboard arrows (we use arrows for mesh nudge)
       try { if (typeof sp.setCameraKeyboardEnabled === 'function') sp.setCameraKeyboardEnabled(false); } catch (err) { void err; }
 
-      // apply current grid/axes/gizmo visibility to scene
-      sp.setGridVisible(gridVisible);
-      sp.setAxesVisible(axesVisible);
+      // New/opened editor scenes should always start with viewport guides visible.
+      setGridVisible(true);
+      setAxesVisible(true);
+      sp.setGridVisible(true);
+      sp.setAxesVisible(true);
       if (typeof sp.setGizmoVisible === 'function') sp.setGizmoVisible(runtimeMode ? false : gizmoVisible);
       try { if (typeof sp.setViewportToolMode === "function") sp.setViewportToolMode(viewportTool); } catch (err) { void err; }
 
@@ -324,7 +370,7 @@ export default function App() {
 
       forceRerender((n) => n + 1);
     },
-    [gridVisible, axesVisible, gizmoVisible, runtimeMode, snapEnabled, snapMove, viewportTool, applySelectionIntent, applySelectionToCurrent, scriptEngine]
+    [gizmoVisible, runtimeMode, snapEnabled, snapMove, viewportTool, applySelectionIntent, applySelectionToCurrent, scriptEngine]
   );
 
   // Push snap settings to the current instance when toggled/changed.
@@ -440,6 +486,47 @@ export default function App() {
     if (currentSceneId === id) setCurrentSceneId(null);
   };
 
+  const getMeshGroundOffset = (kind, params = {}, scaling = {}) => {
+    const sy = Math.abs(Number(scaling.y) || 1);
+    const n = (value, fallback) => {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : fallback;
+    };
+    let halfHeight = 0.5;
+    if (kind === "box") {
+      halfHeight = n(params.height, n(params.size, 1)) / 2;
+    } else if (kind === "sphere") {
+      halfHeight = n(params.diameterY, n(params.diameter, 1)) / 2;
+    } else if (kind === "cylinder" || kind === "cone") {
+      halfHeight = n(params.height, 1) / 2;
+    } else if (kind === "plane" || kind === "textbox") {
+      halfHeight = n(params.height, kind === "textbox" ? 1 : 1) / 2;
+    } else if (kind === "torus") {
+      halfHeight = n(params.diameter, 1) / 2;
+    } else if (kind === "tetra") {
+      halfHeight = n(params.size, 1) / 2;
+    } else if (kind === "capsule") {
+      halfHeight = n(params.height, 1) / 2 + n(params.radius, 0.25);
+    } else if (kind === "dome") {
+      halfHeight = n(params.diameter, 1) / 2;
+    } else if (kind === "tube") {
+      halfHeight = n(params.radius, 0.05);
+    } else if (kind === "arrow") {
+      halfHeight = Math.max(n(params.shaftDiameter, 0.06), n(params.headDiameter, 0.12)) / 2;
+    } else if (kind === "contour") {
+      halfHeight = n(params.size?.y, 5) / 2;
+    } else if (kind === "line") {
+      halfHeight = 0;
+    }
+    return Math.max(0, halfHeight * sy);
+  };
+
+  const liftPathToGrid = (points, offset) => {
+    const minY = points.reduce((min, p) => Math.min(min, Number(p.y) || 0), Infinity);
+    const lift = Math.max(0, offset - (Number.isFinite(minY) ? minY : 0));
+    return points.map((p) => ({ ...p, y: (Number(p.y) || 0) + lift }));
+  };
+
   // Create mesh with deterministic id/name; initially always top-level (no parent)
   const addMeshToCurrent = (kind, positionOverride = null) => {
     const inst = getCurrentInstance();
@@ -450,10 +537,25 @@ export default function App() {
     const id = `${kind}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     const name = `${kind}-${Math.floor(Math.random() * 1000)}`;
     const parent = null;
-    const position = positionOverride
-      ? { x: Number(positionOverride.x) || 0, y: Number(positionOverride.y) || 0, z: Number(positionOverride.z) || 0 }
-      : undefined;
-    const meta = createMeta(kind, { id, name, parent, position });
+    let meta;
+    // If a path/points array was passed (drag-create), attach as params
+    if (Array.isArray(positionOverride)) {
+      const pts = positionOverride.map((p) => ({ x: Number(p.x) || 0, y: Number(p.y) || 0, z: Number(p.z) || 0 }));
+      const params = (kind === "tube") ? { path: pts } : (kind === "line" ? { points: pts } : { path: pts });
+      const draft = createMeta(kind, { id, name, parent, params });
+      const offset = getMeshGroundOffset(kind, draft.params, draft.scaling);
+      const lifted = liftPathToGrid(pts, offset);
+      const liftedParams = (kind === "tube") ? { ...draft.params, path: lifted } : (kind === "line" ? { ...draft.params, points: lifted } : { ...draft.params, path: lifted });
+      meta = createMeta(kind, { id, name, parent, params: liftedParams });
+    } else {
+      const position = positionOverride
+        ? { x: Number(positionOverride.x) || 0, y: Number(positionOverride.y) || 0, z: Number(positionOverride.z) || 0 }
+        : undefined;
+      meta = createMeta(kind, { id, name, parent, position });
+      const offset = getMeshGroundOffset(kind, meta.params, meta.scaling);
+      const groundY = Number(position?.y) || 0;
+      meta.position = { ...meta.position, y: groundY + offset };
+    }
     inst.enqueueCommand({ type: "createMesh", payload: { ...meta } });
 
     undoStack.current.push({
@@ -612,6 +714,23 @@ export default function App() {
     setTimeout(() => forceRerender((n) => n + 1), 40);
   };
 
+  // Delete all currently selected meshes (called from SceneView Delete key)
+  const deleteSelectedMeshes = () => {
+    try {
+      const inst = getCurrentInstance();
+      if (!inst) return;
+      const ids = Array.from(selectedIds || []);
+      if (!ids.length) return;
+      // enqueue removals
+      for (const id of ids) {
+        try { inst.enqueueCommand({ type: 'removeMesh', payload: { id } }); } catch (err) { void err; }
+      }
+      // clear selection in UI
+      applySelectionToCurrent([], null);
+      setTimeout(() => forceRerender(n => n + 1), 40);
+    } catch (err) { console.error('deleteSelectedMeshes error', err); }
+  };
+
   const onMeshSelect = (id, ev) => {
     if (!id) return;
     applySelectionIntent(id, {
@@ -662,6 +781,22 @@ export default function App() {
       inst.enqueueCommand({ type: "updateMesh", payload: { id, changes: { parent: groupId } } });
     }
     setTimeout(() => forceRerender((n) => n + 1), 30);
+  };
+
+  const updateMeshOutlinerState = (id, changes = {}) => {
+    const inst = getCurrentInstance();
+    if (!inst || !id) return;
+    try {
+      inst.enqueueCommand({ type: "updateMesh", payload: { id, changes } });
+      if (changes.visible === false || changes.locked === true) {
+        const next = new Set(selectedIdsRef.current || []);
+        next.delete(id);
+        applySelectionToCurrent(next, selectedMeshIdRef.current === id ? null : selectedMeshIdRef.current);
+      }
+      setTimeout(() => forceRerender((n) => n + 1), 30);
+    } catch (err) {
+      void err;
+    }
   };
 
   const openMeshProperties = (meshId) => {
@@ -802,6 +937,22 @@ export default function App() {
         }
       } catch (err) { console.error('nudge error', err); }
 
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") {
+        e.preventDefault();
+        e.stopPropagation();
+        selectAllMeshesInCurrentScene();
+        return;
+      }
+
+      if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+        const shortcut = e.shiftKey ? PRIMITIVE_SHIFT_SHORTCUTS[e.code] : PRIMITIVE_SHORTCUTS[e.code];
+        if (shortcut && currentSceneId) {
+          e.preventDefault();
+          setArmedCreateKind((prev) => (prev === shortcut.kind ? null : shortcut.kind));
+          return;
+        }
+      }
+
       if (e.key === "Delete" || e.key === "Backspace") {
         if (selectedMeshId) {
           deleteMeshFromScene(selectedMeshId);
@@ -824,7 +975,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [runtimeMode, selectedMeshId, deleteMeshFromScene, nudgeSelectedMesh, undo, redo]);
+  }, [runtimeMode, currentSceneId, selectedMeshId, deleteMeshFromScene, nudgeSelectedMesh, undo, redo, selectAllMeshesInCurrentScene]);
 
   const toggleGrid = () => {
     const next = !gridVisible;
@@ -986,6 +1137,52 @@ export default function App() {
       alert("GLB, GLTF, OBJ 파일만 현재 바로 불러올 수 있습니다.");
       return;
     }
+    // If user selected a .gltf (JSON) it may reference external .bin/.png files which
+    // cannot be resolved from a single blob URL. Detect and guide the user.
+    const ext = extMatch[1].toLowerCase();
+    if (ext === "gltf") {
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const text = String(reader.result || "");
+          // look for external resource URIs like "uri": "Cooler.bin" or image files
+          const hasExternal = /"uri"\s*:\s*"[^"\\]+\.(bin|png|jpg|jpeg|gif|ktx|basis)"/i.test(text);
+          if (hasExternal) {
+            alert("Selected .gltf references external resources (e.g. .bin/.png). Please upload a .glb or provide all related files together (zip or multi-file import).\n\n현재는 단일 .gltf 파일로는 외부 리소스를 자동으로 해결하지 못합니다.");
+            return;
+          }
+
+          // safe to continue with single .gltf that embeds resources
+          const objectUrl = URL.createObjectURL(file);
+          modelObjectUrlsRef.current.add(objectUrl);
+          const modelName = (file.name || "model").replace(/\.[^/.]+$/, "") || "model";
+          const id = inst.importModel(
+            {
+              url: objectUrl,
+              fileName: file.name,
+              extension: `.${ext}`,
+            },
+            {
+              name: modelName,
+              fileName: file.name,
+            }
+          );
+          setTimeout(() => {
+            const current = getCurrentInstance();
+            if (current && typeof current.setHighlightedMeshes === "function") {
+              current.setHighlightedMeshes([id], id);
+            }
+            applySelectionToCurrent([id], id);
+            forceRerender((n) => n + 1);
+          }, 80);
+        } catch (err) {
+          console.error(err);
+          alert("Failed to read .gltf file.");
+        }
+      };
+      reader.readAsText(file);
+      return;
+    }
 
     const objectUrl = URL.createObjectURL(file);
     modelObjectUrlsRef.current.add(objectUrl);
@@ -995,7 +1192,7 @@ export default function App() {
       {
         url: objectUrl,
         fileName: file.name,
-        extension: `.${extMatch[1].toLowerCase()}`,
+        extension: `.${ext}`,
       },
       {
         name: modelName,
@@ -1181,6 +1378,7 @@ export default function App() {
 
       {/* Tools modal */}
       <Tools open={showTools} onClose={() => setShowTools(false)} getInstance={getCurrentInstance} t={t} />
+      <SceneCodeModal open={showSceneCode} getInstance={getCurrentInstance} onClose={() => setShowSceneCode(false)} t={t} />
 
       <ViewPresetBar
         disabled={!getCurrentInstance()}
@@ -1405,11 +1603,28 @@ export default function App() {
                         <div key={s.id} className="scene-item" onClick={() => switchScene(s.id)} style={{ cursor: "pointer", background: currentSceneId === s.id ? "rgba(255,255,255,0.03)" : undefined }}>
                           <div className="meta">
                             <div className="title">{s.name}</div>
-                            <div className="sub">{s.id}</div>
                           </div>
-                          <div style={{ display: "flex", gap: 8 }}>
-                            <button type="button" onClick={(ev) => { ev.stopPropagation(); saveSceneToJSON(s.id); }}>{t("btn.save")}</button>
-                            <button type="button" className="btn btn-warn" onClick={(ev) => { ev.stopPropagation(); deleteScene(s.id); }}>{t("btn.delete")}</button>
+                          <div className="controls" style={{ display: "flex", gap: 6 }}>
+                            <IconButton title={t("btn.detail") || 'Detail'} onClick={(ev) => { ev.stopPropagation(); setDetailScene(s); }} className="icon-toggle">
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+                                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.2" />
+                                <path d="M12 8v1M12 11v5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                              </svg>
+                            </IconButton>
+                            <IconButton title={t("btn.save")} onClick={(ev) => { ev.stopPropagation(); saveSceneToJSON(s.id); }} className="icon-toggle">
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+                                <path d="M5 4h11v4H5z" fill="currentColor" opacity="0.95" />
+                                <path d="M5 8v10a2 2 0 0 0 2 2h10V8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+                                <path d="M16 2v6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+                              </svg>
+                            </IconButton>
+                            <IconButton title={t("btn.delete")} onClick={(ev) => { ev.stopPropagation(); deleteScene(s.id); }} className="icon-toggle">
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+                                <path d="M3 6h18" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+                                <path d="M8 6v12a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+                                <path d="M10 11v6M14 11v6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+                              </svg>
+                            </IconButton>
                           </div>
                         </div>
                       ))}
@@ -1474,7 +1689,7 @@ export default function App() {
                           <span className="mesh-section-line" />
                         </div>
 
-                        <div className="mesh-list-card mesh-list-fill">
+                        <div className="mesh-tree-scroll mesh-list-fill">
                           <MeshList
                             meshes={meshList || []}
                             onSelect={onMeshSelect}
@@ -1483,6 +1698,8 @@ export default function App() {
                             selectedId={selectedMeshId}
                             selectedIds={selectedIds}
                             onMoveToGroup={moveMeshesToGroup}
+                            onToggleVisible={(id, visible) => updateMeshOutlinerState(id, { visible })}
+                            onToggleLocked={(id, locked) => updateMeshOutlinerState(id, { locked })}
                             t={t}
                           />
                         </div>
@@ -1492,6 +1709,8 @@ export default function App() {
                 )}
               </>
             )}
+
+            <SceneDetailModal open={!!detailScene} scene={detailScene} onClose={() => setDetailScene(null)} />
           </div>
         </aside>
         )}
@@ -1520,6 +1739,8 @@ export default function App() {
                 addMeshToCurrent(armedCreateKind, point);
                 setArmedCreateKind(null);
               }}
+              onDeleteSelected={deleteSelectedMeshes}
+              onSelectAllMeshes={selectAllMeshesInCurrentScene}
             />
           ) : (
             <div style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--muted)" }}>{t("empty.selectScene")}</div>

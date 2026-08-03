@@ -1,6 +1,16 @@
 // src/components/TopBar.jsx
+import IconButton from "./IconButton";
 
 export default function TopBar({ onToggleGrid, gridVisible, onToggleHeader, headerVisible, onImport, onToggleGizmo, gizmoVisible, onShowShortcuts, onShowHelp, onShowTools, runtimeMode, onToggleRuntimeMode, runtimeDisabled = false, theme = "dark", onToggleTheme, lang = "ko", onToggleLang, t = (s) => s }) {
+  const openSceneCode = () => {
+    try {
+      const fn = (window && window.__showSceneCode) ? window.__showSceneCode : null;
+      if (typeof fn === "function") fn();
+    } catch {
+      if (onShowTools) onShowTools();
+    }
+  };
+
   return (
     <header className="topbar">
       <div className="topbar-left">
@@ -17,57 +27,70 @@ export default function TopBar({ onToggleGrid, gridVisible, onToggleHeader, head
         </nav>
       </div>
 
+      <div className="topbar-center" aria-label="Editor status">
+        <span className={`topbar-status-dot ${runtimeMode ? "running" : ""}`} />
+        <span className="topbar-status-primary">{runtimeMode ? "Runtime" : "Edit"}</span>
+        <span className="topbar-status-secondary">{runtimeMode ? "playing scene" : "scene workspace"}</span>
+      </div>
+
       <div className="topbar-right">
-        <button
-          title={t("topbar.lang")}
-          onClick={() => onToggleLang && onToggleLang()}
-          className="topbar-action"
-          type="button"
-        >
-          {lang === "ko" ? "KO" : "EN"}
-        </button>
-
-        <button
-          title={theme === "dark" ? t("topbar.themeToLight") : t("topbar.themeToDark")}
-          onClick={() => onToggleTheme && onToggleTheme()}
-          className={`icon-btn icon-toggle ${theme === "dark" ? "active" : ""}`}
-          type="button"
-        >
-          {theme === "dark" ? (
-            // moon
+        <div className="topbar-action-group">
+          <IconButton
+            title={runtimeDisabled ? t("topbar.runtimeDisabled") : (runtimeMode ? t("topbar.runtimeOn") : t("topbar.runtimeOff"))}
+            onClick={() => { if (!runtimeDisabled) onToggleRuntimeMode && onToggleRuntimeMode(); }}
+            className={`topbar-tool-btn topbar-run-btn ${runtimeMode ? "active" : ""}`}
+            disabled={runtimeDisabled}
+          >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
-              <path d="M21 14.5A8.5 8.5 0 0 1 9.5 3a7 7 0 1 0 11.5 11.5Z" fill="currentColor" opacity="0.95" />
+              <path d="M8 5v14l12-7-12-7Z" fill="currentColor" />
             </svg>
-          ) : (
-            // sun
+            <span>{t("topbar.run")}</span>
+          </IconButton>
+
+          <IconButton title={t("topbar.import")} onClick={() => onImport && onImport()} className="topbar-tool-btn">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
-              <path d="M12 18a6 6 0 1 0 0-12a6 6 0 0 0 0 12Z" fill="currentColor" opacity="0.95" />
-              <path d="M12 2v2.5M12 19.5V22M4.2 4.2l1.8 1.8M18 18l1.8 1.8M2 12h2.5M19.5 12H22M4.2 19.8 6 18M18 6l1.8-1.8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+              <path d="M12 3v12M8 7l4-4 4 4M4 21h16" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-          )}
-        </button>
+            <span>{t("topbar.import")}</span>
+          </IconButton>
 
-        <button
-          title={runtimeDisabled ? t("topbar.runtimeDisabled") : (runtimeMode ? t("topbar.runtimeOn") : t("topbar.runtimeOff"))}
-          onClick={() => { if (!runtimeDisabled) onToggleRuntimeMode && onToggleRuntimeMode(); }}
-          className={`icon-btn icon-toggle ${runtimeMode ? "active" : ""}`}
-          type="button"
-          disabled={runtimeDisabled}
-        >
-          {/* play icon */}
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
-            <path d="M8 5v14l12-7-12-7Z" fill="currentColor" />
-          </svg>
-        </button>
+          <button title="Show Scene JSON" onClick={openSceneCode} className="topbar-tool-btn" type="button">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+              <path d="M7 4h7l4 4v12H7V4Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+              <path d="M14 4v5h5M10 13h6M10 16h4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <span>Code</span>
+          </button>
+        </div>
 
-        <button title={t("topbar.import")} onClick={() => onImport && onImport()} className="topbar-action" type="button">
-          {t("topbar.import")}
-        </button>
+        <div className="topbar-action-group compact">
+          <IconButton
+            title={theme === "dark" ? t("topbar.themeToLight") : t("topbar.themeToDark")}
+            onClick={() => onToggleTheme && onToggleTheme()}
+            className={`topbar-icon-btn ${theme === "dark" ? "active" : ""}`}
+          >
+            {theme === "dark" ? (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+                <path d="M21 14.5A8.5 8.5 0 0 1 9.5 3a7 7 0 1 0 11.5 11.5Z" fill="currentColor" opacity="0.95" />
+              </svg>
+            ) : (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+                <path d="M12 18a6 6 0 1 0 0-12a6 6 0 0 0 0 12Z" fill="currentColor" opacity="0.95" />
+                <path d="M12 2v2.5M12 19.5V22M4.2 4.2l1.8 1.8M18 18l1.8 1.8M2 12h2.5M19.5 12H22M4.2 19.8 6 18M18 6l1.8-1.8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+              </svg>
+            )}
+          </IconButton>
 
+          <IconButton title={t("topbar.lang")} onClick={() => onToggleLang && onToggleLang()} className="topbar-icon-btn lang-btn">
+            {lang === "ko" ? "KO" : "EN"}
+          </IconButton>
+        </div>
+
+        <div className="topbar-action-group compact">
         <button
           title={headerVisible ? "Hide scene header" : "Show scene header"}
           onClick={() => onToggleHeader && onToggleHeader()}
-          className={`icon-btn icon-toggle ${headerVisible ? "active" : ""}`}
+          className={`topbar-icon-btn ${headerVisible ? "active" : ""}`}
           type="button"
         >
           {headerVisible ? (
@@ -77,7 +100,7 @@ export default function TopBar({ onToggleGrid, gridVisible, onToggleHeader, head
           )}
         </button>
         <button
-          className={`icon-btn icon-toggle ${gridVisible ? "active" : ""}`}
+          className={`topbar-icon-btn ${gridVisible ? "active" : ""}`}
           onClick={() => onToggleGrid && onToggleGrid()}
           title="Toggle Grid"
           type="button"
@@ -93,7 +116,7 @@ export default function TopBar({ onToggleGrid, gridVisible, onToggleHeader, head
         <button
           title={runtimeMode ? "Disabled in runtime mode" : (gizmoVisible ? "Hide gizmo" : "Show gizmo")}
           onClick={() => { if (!runtimeMode) onToggleGizmo && onToggleGizmo(); }}
-          className={`icon-btn icon-toggle ${gizmoVisible ? "active" : ""}`}
+          className={`topbar-icon-btn ${gizmoVisible ? "active" : ""}`}
           type="button"
           disabled={runtimeMode}
         >
@@ -102,11 +125,12 @@ export default function TopBar({ onToggleGrid, gridVisible, onToggleHeader, head
         <button
           title="Shortcuts"
           onClick={() => onShowShortcuts && onShowShortcuts()}
-          className="icon-btn icon-toggle"
+          className="topbar-icon-btn"
           type="button"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.2"/><text x="12" y="16" fontSize="12" textAnchor="middle" fill="currentColor">?</text></svg>
         </button>
+        </div>
       </div>
     </header>
   );

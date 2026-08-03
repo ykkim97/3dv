@@ -11,6 +11,11 @@ export default function PerformanceOverlay({ sp }) {
         if (!sp) return;
         const engine = sp.getEngine();
         const scene = sp.getScene();
+        try {
+          if (scene && scene.meshes && scene.meshes.length <= 1 && typeof sp.ensureViewportGuides === "function") {
+            sp.ensureViewportGuides();
+          }
+        } catch { void 0; }
         const toNumber = (v) => {
           if (v == null) return 0;
           if (typeof v === "number") return v;
@@ -33,7 +38,6 @@ export default function PerformanceOverlay({ sp }) {
         const meshes = scene && Array.isArray(scene.meshes) ? scene.meshes.length : 0;
         const active = scene && typeof scene.getActiveMeshes === "function" ? (toNumber(scene.getActiveMeshes().length) || 0) : 0;
         const materials = scene && Array.isArray(scene.materials) ? scene.materials.length : 0;
-        // try common engine drawCalls field with graceful fallback and coerce monitor objects
         let drawCalls = 0;
         try { drawCalls = toNumber(engine && (engine.drawCalls || engine._drawCalls || engine._perfDrawCalls || 0)); } catch { drawCalls = 0; }
 
@@ -58,43 +62,16 @@ export default function PerformanceOverlay({ sp }) {
     return () => { mounted = false; if (raf) cancelAnimationFrame(raf); };
   }, [sp]);
 
-  const style = {
-    position: "absolute",
-    right: 12,
-    top: 12,
-    background: "rgba(10,10,12,0.7)",
-    color: "#e6edf3",
-    padding: "8px 10px",
-    borderRadius: 8,
-    fontSize: 12,
-    lineHeight: "14px",
-    zIndex: 40,
-    boxShadow: "0 2px 10px rgba(0,0,0,0.6)",
-    minWidth: 120,
-  };
-
   return (
-    <div style={style} aria-hidden>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+    <div className="perf-overlay" aria-hidden>
+      <div className="perf-row header">
         <strong>Perf</strong>
-        <span style={{ opacity: 0.8 }}>{stats.fps} FPS</span>
+        <span className="muted-val">{stats.fps} FPS</span>
       </div>
-      <div style={{ display: "flex", justifyContent: "space-between" }}>
-        <span style={{ opacity: 0.85 }}>Meshes</span>
-        <span style={{ opacity: 0.9 }}>{stats.meshes}</span>
-      </div>
-      <div style={{ display: "flex", justifyContent: "space-between" }}>
-        <span style={{ opacity: 0.85 }}>Active</span>
-        <span style={{ opacity: 0.9 }}>{stats.active}</span>
-      </div>
-      <div style={{ display: "flex", justifyContent: "space-between" }}>
-        <span style={{ opacity: 0.85 }}>Mats</span>
-        <span style={{ opacity: 0.9 }}>{stats.materials}</span>
-      </div>
-      <div style={{ display: "flex", justifyContent: "space-between" }}>
-        <span style={{ opacity: 0.85 }}>Draw</span>
-        <span style={{ opacity: 0.9 }}>{stats.drawCalls}</span>
-      </div>
+      <div className="perf-row"><span className="label">Meshes</span><span className="value">{stats.meshes}</span></div>
+      <div className="perf-row"><span className="label">Active</span><span className="value">{stats.active}</span></div>
+      <div className="perf-row"><span className="label">Mats</span><span className="value">{stats.materials}</span></div>
+      <div className="perf-row"><span className="label">Draw</span><span className="value">{stats.drawCalls}</span></div>
     </div>
   );
 }

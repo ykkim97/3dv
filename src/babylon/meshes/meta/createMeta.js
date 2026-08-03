@@ -16,6 +16,7 @@ import { ArrowMeta } from "./ArrowMeta";
 import { DomeMeta } from "./DomeMeta";
 import { CapsuleMeta } from "./CapsuleMeta";
 import { TubeMeta } from "./TubeMeta";
+import { ContourMeta } from "./ContourMeta";
 
 // Small factory
 export function createMeta(kind, opts = {}) {
@@ -26,6 +27,7 @@ export function createMeta(kind, opts = {}) {
     params: opts.params,
     parent: opts.parent,
     visible: opts.visible,
+    locked: opts.locked,
     position: opts.position,
     rotation: opts.rotation,
     scaling: opts.scaling,
@@ -48,6 +50,7 @@ export function createMeta(kind, opts = {}) {
   if (kind === "dome") return new DomeMeta(base);
   if (kind === "capsule") return new CapsuleMeta(base);
   if (kind === "tube") return new TubeMeta(base);
+  if (kind === "contour") return new ContourMeta(base);
 
   return new MeshMeta({ kind, ...base });
 }

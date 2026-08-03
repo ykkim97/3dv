@@ -1,6 +1,13 @@
 // src/babylon/AxesHelper.js
-import { MeshBuilder, Color3, Vector3, StandardMaterial, Mesh, Quaternion } from "@babylonjs/core";
+import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { DynamicTexture } from "@babylonjs/core/Materials/Textures/dynamicTexture";
+import { Color3 } from "@babylonjs/core/Maths/math.color";
+import { Quaternion, Vector3 } from "@babylonjs/core/Maths/math.vector";
+import { Mesh } from "@babylonjs/core/Meshes/mesh";
+import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
+import "@babylonjs/core/Meshes/Builders/cylinderBuilder";
+import "@babylonjs/core/Meshes/Builders/linesBuilder";
+import "@babylonjs/core/Meshes/Builders/planeBuilder";
 
 export default class AxesHelper {
   constructor(scene, size = 8, opts = {}) {
@@ -58,11 +65,11 @@ export default class AxesHelper {
 
     // create tick marks along the axis at configured spacing
     try {
-      this._createTicksAndLabels(from, to, color);
+      this._createTicksAndLabels(name, from, to, color);
     } catch (err) { void err; }
   }
 
-  _createTicksAndLabels(from, to, color) {
+  _createTicksAndLabels(name, from, to, color) {
     const spacing = Math.max(1, this.opts.tickSpacing);
     const tickSize = this.opts.tickSize || 0.25;
     // axis direction
