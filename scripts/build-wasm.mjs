@@ -4,7 +4,7 @@ import process from "node:process";
 
 async function main() {
   const repoRoot = process.cwd();
-  const watPath = path.join(repoRoot, "src", "wasm", "demo.wat");
+  const watPath = path.join(repoRoot, "src", "infrastructure", "wasm", "demo.wat");
   const outDir = path.join(repoRoot, "public", "wasm");
   const outWasmPath = path.join(outDir, "demo.wasm");
 

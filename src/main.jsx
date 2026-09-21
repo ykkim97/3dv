@@ -5,9 +5,9 @@ import '@fontsource/inter/600.css'
 import '@fontsource/inter/800.css'
 import '@fontsource/jetbrains-mono/400.css'
 import '@fontsource/jetbrains-mono/700.css'
-import './index.css'
-import App from './App.jsx'
-import initTooltipManager from './tooltipManager';
+import './shared/styles/index.css'
+import App from './app/App.jsx'
+import initTooltipManager from './shared/tooltip/tooltipManager';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
