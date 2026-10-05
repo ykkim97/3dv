@@ -36,7 +36,7 @@ test('browser export writes an expanded city to the chosen file and awaits close
   assert.equal(closed, true);
   const saved = validateCity(JSON.parse(contents));
   assert.deepEqual(saved, city);
-  assert.equal(city.name, '새로운 시작', 'file naming does not rename the city');
+  assert.equal(city.name, '빈 평지', 'file naming does not rename the city');
 });
 
 test('picker cancellation writes nothing, permission and write failures stay visible', async () => {

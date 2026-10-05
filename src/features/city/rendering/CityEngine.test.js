@@ -392,7 +392,7 @@ test('power and water presets build distinct pickable facilities on valid plots'
   editor.shadows = { addShadowCaster() {}, removeShadowCaster() {} };
   const utilities = ASSETS.filter(asset => ['power', 'water'].includes(asset.category));
   try {
-    assert.deepEqual(CATEGORIES.filter(category => ['power', 'water'].includes(category.id)).map(category => category.name), ['전력시설', '수도시설']);
+    assert.deepEqual(CATEGORIES.filter(category => ['power', 'water'].includes(category.id)).map(category => category.name), ['전력 시설', '상하수도 시설']);
     assert.equal(utilities.length, 14);
     for (const asset of utilities) {
       editor.city = createCity('blank');

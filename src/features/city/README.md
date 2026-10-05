@@ -28,6 +28,20 @@ panels use the same inspector position and temporarily hide the selection inspec
 | `interaction` | Pointer input, selection, previews and placement commands |
 | `rendering` | Babylon scene lifecycle, mesh builders and rendering systems |
 | `editor` | Editor composition, HUD components, camera controls and city styles |
+| `manual` | Searchable Korean manual, live preset dictionary, shortcuts and tutorials |
+
+## Manual and next steps
+
+Open **매뉴얼** in the header (or the footer help button) for the full-page guide.
+The native modal dialog keeps the city mounted, contains keyboard focus and pauses
+3D rendering while reading. `#manual` also opens the guide directly without creating
+a city scene. Manual modules are loaded on demand. Printing supports PDF through
+the browser/system print dialog. Public JavaScript convenience APIs are marked as
+planned; no fictional callable functions are documented.
+
+The agreed implementation order and completed facility-properties milestone are
+recorded in `docs/implementation-roadmap.md`. Resume feature work at step 2,
+connection-graph supply calculation, after the manual work.
 
 ## Dependency rules
 
@@ -35,8 +49,8 @@ panels use the same inspector position and temporarily hide the selection inspec
   Geometry/material modules in their owning feature may import Babylon.
 - UI and rendering import domain functions. Domain functions never import editor
   components, input handling or scene runtime classes.
-- Import the owning module directly. `cityModel.js` remains a compatibility export
-  facade for the previous model API; new code should not depend on that facade.
+- Import the owning module directly. The unused `cityModel.js` compatibility
+  facade and the previous standalone mesh editor were removed.
 - Keep feature-specific UI and tests beside their feature. Move code to `shared`
   only when it is independent of the city domain and reused outside this feature.
 - `CityEngine` owns scene initialization, shared resources, city synchronization

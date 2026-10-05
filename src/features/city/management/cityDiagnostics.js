@@ -35,12 +35,12 @@ export function analyzeCity(city, utility, fire) {
   const workforce = Math.ceil(population * 0.45);
   const sections = [
     { id: 'plot', label: '부지·도로', value: `${city.plots.length - disconnectedPlots.length}/${city.plots.length}`, detail: '도로 연결 부지', warning: disconnectedPlots.length > 0 || city.plots.length === 0 },
-    { id: 'residential', label: '주거', value: population.toLocaleString(), detail: `주거 ${homes.length}개 · 수용 인원`, warning: homes.length === 0 },
-    { id: 'commercial', label: '상업', value: jobs.toLocaleString(), detail: `예상 일자리 · 계획 수요 ${workforce}`, warning: population > 0 && jobs < workforce },
+    { id: 'residential', label: '주거시설', value: population.toLocaleString(), detail: `주거 ${homes.length}개 · 수용 인원`, warning: homes.length === 0 },
+    { id: 'commercial', label: '상업 · 산업', value: jobs.toLocaleString(), detail: `예상 일자리 · 계획 수요 ${workforce}`, warning: population > 0 && jobs < workforce },
     { id: 'landmark', label: '공공시설', value: `${fire.totals.covered}/${fire.totals.buildings}`, detail: `소방 도달 · 학교 ${access.school.reached}/${population}명 · 의료 ${access.hospital.reached}/${population}명`, warning: population > 0 && (fire.totals.covered < fire.totals.buildings || access.school.reached < population || access.hospital.reached < population || access.school.capacity < schoolDemand) },
-    { id: 'power', label: '전력시설', value: `${utility.totals.power}/${utility.totals.consumers}`, detail: '예상 공급 건물', warning: utility.totals.power < utility.totals.consumers },
-    { id: 'water', label: '수도시설', value: `${utility.totals.water}/${utility.totals.consumers}`, detail: '예상 공급 건물', warning: utility.totals.water < utility.totals.consumers },
-    { id: 'nature', label: '공원·자연', value: `${access.park.reached}/${population}`, detail: '녹지 접근 주민', warning: population > 0 && access.park.reached < population },
+    { id: 'power', label: '전력 시설', value: `${utility.totals.power}/${utility.totals.consumers}`, detail: '예상 공급 건물', warning: utility.totals.power < utility.totals.consumers },
+    { id: 'water', label: '상하수도 시설', value: `${utility.totals.water}/${utility.totals.consumers}`, detail: '예상 공급 건물', warning: utility.totals.water < utility.totals.consumers },
+    { id: 'nature', label: '공원 · 조경', value: `${access.park.reached}/${population}`, detail: '녹지 접근 주민', warning: population > 0 && access.park.reached < population },
     { id: 'terrain', label: '지형', value: `${terrainRelief.toFixed(1)} m`, detail: '최고·최저 고도차 · 지형 편집 가능', warning: false },
   ];
   const issues = [];

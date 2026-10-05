@@ -8,11 +8,11 @@ export const CONNECTION_TYPES = [
   { id: 'general', name: '일반 연결', color: '#38df87' },
 ];
 export const FLOW_EFFECTS = [
-  { id: 'bands', name: '이동 띠' },
+  { id: 'bands', name: '흐르는 띠' },
   { id: 'arrows', name: '방향 화살표' },
   { id: 'pulse', name: '빛 펄스' },
-  { id: 'dots', name: '점 흐름' },
-  { id: 'wave', name: '에너지 파동' },
+  { id: 'dots', name: '흐르는 점' },
+  { id: 'wave', name: '파동 효과' },
 ];
 export const DEFAULT_CONNECTION = { type: 'general', color: '#38df87', radius: 0.45, clearance: 2, speed: 4, direction: 'forward', route: 'elbow', effect: 'bands', animated: true, visible: true };
 

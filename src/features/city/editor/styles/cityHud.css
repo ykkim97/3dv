@@ -52,7 +52,7 @@
   max-width: calc(100% - 310px); padding: 8px 10px; border-radius: 7px;
   display: flex; align-items: center; gap: 12px; z-index: 3;
 }
-.city-app .world-summary>.panel-label, .city-app .summary-diagnostics { display: none; }
+.city-app .world-summary>.panel-label { display: none; }
 .city-app .world-summary .summary-primary { margin: 0; gap: 6px; }
 .city-app .summary-primary>svg { width: 16px; height: 16px; }
 .city-app .summary-primary strong { font-size: 19px; font-weight: 600; letter-spacing: -.5px; }
@@ -66,19 +66,14 @@
 .city-app .summary-utilities span { gap: 3px; font-size: 8px; }
 .city-app .summary-utilities b { font-size: 9px; }
 .city-app .scene-tools { top: var(--hud-top); left: var(--hud-gap); padding: 4px; gap: 2px; border-radius: 7px; z-index: 4; }
-.city-app .scene-tools button, .city-app .view-tools button { width: 30px; height: 30px; min-height: 30px; padding: 6px; }
-.city-app .scene-tools button svg, .city-app .view-tools button svg { width: 17px; height: 17px; }
-.city-app .view-tools { top: 238px; left: var(--hud-gap); right: auto; padding: 4px; gap: 1px; z-index: 4; }
-.city-app .view-tools>span, .city-app .scene-tools>span { margin: 2px 5px; }
-.city-app .grid-toggle, .city-app .info-toggle, .city-app .map-toggle {
+.city-app .scene-tools button { width: 30px; height: 30px; min-height: 30px; padding: 6px; }
+.city-app .scene-tools button svg { width: 17px; height: 17px; }
+.city-app .scene-tools>span { margin: 2px 5px; }
+.city-app .map-toggle {
   top: var(--hud-top); min-height: 32px; height: 32px; padding: 5px 8px;
   width: auto; font-size: 9px; gap: 5px; border-radius: 6px; z-index: 4;
 }
-.city-app .grid-toggle { left: 60px; right: auto; flex-wrap: nowrap; }
-.city-app .grid-toggle>span { font-size: 8px; margin-left: 3px; }
-.city-app .info-toggle { left: 155px; right: auto; }
 .city-app .map-toggle { position: absolute; left: 270px; display: none; }
-.city-app .diagnostics-toggle { display: none; }
 .city-app .scene-layer-panel { top: 113px; left: 60px; right: auto; width: 204px; padding: 9px; z-index: 5; }
 .city-app .selection-panel {
   top: 126px; right: var(--hud-gap); left: auto; width: 224px;
@@ -174,7 +169,7 @@
 .city-app .city-change-summary small { font-size: 8px; }
 .city-app .city-toast { top: 68px; max-width: min(440px, 80%); padding: 8px 12px; font-size: 10px; }
 .city-app .modal-backdrop { padding: 18px; }
-.city-app .preset-modal, .city-app .help-modal, .city-app .city-diagnostics, .city-app .facility-directory { max-height: calc(100% - 24px); padding: 24px; border-radius: 10px; }
+.city-app .preset-modal, .city-app .city-diagnostics, .city-app .facility-directory { max-height: calc(100% - 24px); padding: 24px; border-radius: 10px; }
 
 @media (max-width: 1200px) {
   .city-app .city-header { gap: 8px; }
@@ -215,8 +210,6 @@
   .city-app .summary-grid b { font-size: 10px; }
   .city-app .summary-grid span { font-size: 7px; }
   .city-app .selection-panel { top: 151px; right: 8px; width: 195px; padding: 10px; max-height: max(80px, calc(100% - 160px - var(--dock-space))); }
-  .city-app .grid-toggle { left: 52px; }
-  .city-app .info-toggle { left: 140px; }
   .city-app .map-toggle { left: 249px; }
   .city-app .scene-layer-panel { left: 52px; right: 8px; top: 103px; width: auto; padding: 5px; }
   .city-app .scene-layer-panel>span { display: none; }
@@ -224,7 +217,6 @@
   .city-app .map-layer-controls button { font-size: 8px; min-height: 28px; padding: 3px; }
   .city-app.info-visible .world-summary { top: 147px; }
   .city-app.info-visible .selection-panel { top: 195px; max-height: max(80px, calc(100% - 204px - var(--dock-space))); }
-  .city-app .view-tools { top: 232px; }
   .city-app .world-heading { top: 149px; left: 54px; max-width: 220px; }
   .city-app .world-heading h1 { font-size: 16px; }
   .city-app .world-heading p { font-size: 9px; }
@@ -248,7 +240,7 @@
   .city-app .mobile-help { display: flex; flex-shrink: 0; }
   .city-app .city-status>div:first-child { max-width: calc(100% - 30px); }
   .city-app .modal-backdrop { padding: 10px; }
-  .city-app .preset-modal, .city-app .help-modal, .city-app .city-diagnostics, .city-app .facility-directory { padding: 18px; max-height: calc(100% - 8px); }
+  .city-app .preset-modal, .city-app .city-diagnostics, .city-app .facility-directory { padding: 18px; max-height: calc(100% - 8px); }
   .city-app .city-diagnostics h2, .city-app .facility-directory h2 { font-size: 20px; }
 }
 @media (max-width: 380px) {
@@ -283,8 +275,6 @@
   .city-app .city-header { height: 38px; }
   .city-app .world-summary { top: 52px; right: 6px; }
   .city-app .selection-panel { top: 95px; right: 6px; width: 190px; max-height: max(64px, calc(100% - 104px - var(--dock-space))); }
-  .city-app .view-tools { top: 134px; left: 6px; display: flex; flex-direction: row; }
-  .city-app .view-tools>span { width: 1px; height: 20px; }
   .city-app .scene-tools { flex-direction: row; top: 92px; }
   .city-app .scene-tools>span { width: 1px; height: 20px; }
   .city-app .tray-content { max-height: 106px; }
@@ -299,14 +289,12 @@
   .city-app .city-change-summary { display: none; }
 }
 @media (pointer: coarse) {
-  .city-app .scene-tools button, .city-app .view-tools button { width: 36px; height: 36px; }
+  .city-app .scene-tools button { width: 36px; height: 36px; }
   .city-app .category-tabs>button { min-height: 34px; height: 34px !important; }
   .city-app .category-tabs { height: 44px; }
   .city-app .selection-panel>button, .city-app .surface-picker button { min-height: 34px; }
-  .city-app .view-tools { top: 256px; }
 }
 @media (max-height: 480px) and (pointer: coarse) {
-  .city-app .view-tools { top: 144px; }
   .city-app .scene-layer-panel { top: 192px; left: 6px; right: auto; width: 220px; }
 }
 @media (max-height: 480px) and (max-width: 700px) {

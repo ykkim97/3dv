@@ -24,7 +24,7 @@ function fixture() {
 test('facility properties round-trip, normalize input and preserve legacy names and defaults', () => {
   const city = fixture();
   assert.equal(validateCity(city), city);
-  assert.equal(facilityName(city.objects[0]), '가든 하우스');
+  assert.equal(facilityName(city.objects[0]), '단독주택');
   assert.equal(facilityStatus(city.objects[0]).id, 'running');
   const next = updateFacilityProperties(city, 'a', { name: ' 제1 주택 ', code: ' H-01 ', notes: ' 중요 부하 ', status: 'fault', demandKW: 0 });
   assert.equal(city.objects[0].properties, undefined, 'updates do not mutate history');
@@ -35,7 +35,7 @@ test('facility properties round-trip, normalize input and preserve legacy names 
   assert.equal(facilityStatus(loaded.objects[0]).name, '고장');
   const cleared = updateFacilityProperties(next, 'a', { name: '', code: '', notes: '', status: 'running', demandKW: undefined });
   assert.deepEqual(cleared.objects[0].properties, {});
-  assert.equal(facilityName(cleared.objects[0]), '가든 하우스');
+  assert.equal(facilityName(cleared.objects[0]), '단독주택');
   assert.deepEqual(facilityNumberFields({ asset: 'ess' }), ['demandKW', 'capacityKW', 'storageKWh', 'chargePercent']);
   assert.ok(facilityNumberFields({ asset: 'smart-factory' }).includes('generationKW'));
   assert.ok(facilityNumberFields({ asset: 'pump-station' }).includes('capacityM3h'));

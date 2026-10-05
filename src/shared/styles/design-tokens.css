@@ -2,7 +2,7 @@
   color-scheme: dark;
 
   /* Typography */
-  --font-ui: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-ui: "Pretendard Variable", Pretendard, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
   --font-size-xs: 11px;
   --font-size-sm: 12px;

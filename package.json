@@ -4,8 +4,6 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "predev": "node scripts/build-wasm.mjs",
-    "prebuild": "node scripts/build-wasm.mjs",
     "dev": "vite",
     "build": "vite build",
     "tauri": "tauri",
@@ -15,28 +13,15 @@
     "lint:city": "eslint src/features/city src/app/App.jsx",
     "test:city": "node --test src/features/city/**/*.test.js",
     "preview": "vite preview",
-    "build:wasm": "node scripts/build-wasm.mjs"
+    "audit:unused": "node scripts/audit-unused.mjs"
   },
   "dependencies": {
     "@babylonjs/core": "^8.40.1",
-    "@babylonjs/gui": "^8.40.1",
-    "@babylonjs/inspector": "^8.40.1",
-    "@babylonjs/loaders": "^8.40.1",
-    "@babylonjs/materials": "^8.40.1",
-    "@fontsource/inter": "^5.2.8",
     "@fontsource/jetbrains-mono": "^5.2.8",
-    "@mapbox/vector-tile": "^3.0.0",
-    "@monaco-editor/react": "^4.7.0",
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-dialog": "^2.7.3",
-    "cesium": "^1.145.0",
-    "earcut": "^3.2.3",
-    "monaco-editor": "^0.55.1",
-    "pbf": "^5.1.2",
-    "pmtiles": "^4.5.0",
-    "prettier": "^3.8.1",
+    "pretendard": "^1.3.9",
     "react": "^19.2.0",
-    "react-babylonjs": "^3.2.5-beta.2",
     "react-dom": "^19.2.0"
   },
   "devDependencies": {
@@ -49,7 +34,6 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
-    "vite": "^7.2.4",
-    "wabt": "^1.0.37"
+    "vite": "^7.2.4"
   }
 }
