@@ -1,0 +1,20 @@
+.connection-panel { position: absolute; z-index: 30; top: 112px; right: 72px; width: min(320px, calc(100vw - 90px)); max-height: calc(100dvh - 170px); overflow-y: auto; padding: 14px; border-radius: 10px; color: #dce8df; font-size: 12px; }
+.connection-title, .connection-actions, .connection-panel label { display: flex; align-items: center; gap: 8px; }
+.connection-title { justify-content: space-between; font-size: 14px; }
+.connection-panel p, .connection-panel small { color: #afc5ba; line-height: 1.6; }
+.connection-panel small { display: block; }
+.connection-panel button, .connection-panel select, .connection-panel input { background: #30473f; border: 1px solid #587166; color: #e1eee5; border-radius: 5px; padding: 5px; }
+.connection-panel button { cursor: pointer; }
+.connection-panel label { margin: 9px 0; flex-wrap: wrap; }
+.connection-panel label select, .connection-panel label input { margin-left: auto; max-width: 165px; }
+.connection-panel input[type=number] { width: 62px; }
+.connection-panel input[type=color] { width: 48px; height: 28px; padding: 2px; }
+.connection-panel input[type=checkbox] { accent-color: #38df87; }
+.connection-actions { flex-wrap: wrap; }
+.connection-list { margin-top: 12px; max-height: 200px; overflow-y: auto; }
+.connection-list > div { display: flex; margin: 5px 0; gap: 3px; }
+.connection-list > div > button:first-child { flex: 1; text-align: left; min-width: 0; }
+.connection-list span { display: block; font-size: 10px; overflow-wrap: anywhere; }
+.connection-list i { display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; }
+.connection-list .selected button { border-color: #38df87; }
+@media (max-width: 600px) { .connection-panel { top: 105px; right: 58px; width: calc(100vw - 80px); max-height: calc(100dvh - 175px); } }

@@ -1,0 +1,78 @@
+{
+  "connections": 208,
+  "generated": 208,
+  "visible": 192,
+  "stages": {
+    "generation": {
+      "count": 30,
+      "color": "#f4c95d",
+      "radius": 0.45,
+      "clearance": 3,
+      "speed": 5,
+      "route": "straight",
+      "effect": "pulse"
+    },
+    "transmission": {
+      "count": 35,
+      "color": "#ff9654",
+      "radius": 0.65,
+      "clearance": 6,
+      "speed": 7,
+      "route": "straight",
+      "effect": "arrows"
+    },
+    "distribution": {
+      "count": 28,
+      "color": "#46c9ff",
+      "radius": 0.3,
+      "clearance": 2.5,
+      "speed": 4,
+      "route": "elbow",
+      "effect": "bands"
+    },
+    "consumption": {
+      "count": 83,
+      "color": "#38df87",
+      "radius": 0.15,
+      "clearance": 1.5,
+      "speed": 2,
+      "route": "elbow",
+      "effect": "dots"
+    },
+    "charging": {
+      "count": 16,
+      "color": "#5aaaff",
+      "radius": 0.25,
+      "clearance": 3,
+      "speed": 3,
+      "route": "elbow",
+      "effect": "wave"
+    },
+    "discharging": {
+      "count": 16,
+      "color": "#c28aff",
+      "radius": 0.3,
+      "clearance": 5,
+      "speed": 4,
+      "route": "straight",
+      "effect": "arrows",
+      "visible": false
+    }
+  },
+  "generators": 30,
+  "substations": 9,
+  "transmissionTowers": 27,
+  "distributionNodes": 28,
+  "batteries": 16,
+  "consumers": 83,
+  "factoriesConnected": 6,
+  "checks": {
+    "validCityJson": true,
+    "existingScenePreserved": true,
+    "allConsumersReachable": true,
+    "allGeneratorsConnected": true,
+    "storageChargeAndDischarge": true
+  },
+  "scenario": "Main supply and renewable injection; ESS charging visible, discharge links available but hidden to avoid simultaneous opposite flows.",
+  "model": "Conceptual topology only; not a physical power-flow/voltage/capacity simulation."
+}

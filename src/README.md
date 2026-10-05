@@ -20,3 +20,7 @@ infrastructure ----------------^ (injected at the app boundary)
 ```
 
 Avoid importing `app` from lower layers. Feature-specific components should stay in their feature instead of moving into `shared` merely because more than one component uses them.
+
+The city editor has its own [feature architecture](features/city/README.md), with
+separate domain, interaction, rendering and UI modules. `app/App.jsx` mounts
+`features/city/editor/CityEditor.jsx`; city styles belong to that feature.

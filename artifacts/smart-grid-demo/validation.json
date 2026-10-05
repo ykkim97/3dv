@@ -1,0 +1,56 @@
+{
+  "source": "TEST_2.city.json",
+  "map": {
+    "size": 480,
+    "resolution": 240,
+    "cellSize": 2
+  },
+  "objects": 726,
+  "plots": 49,
+  "roads": 73,
+  "added": {
+    "objects": 301,
+    "plots": 28,
+    "roads": 19
+  },
+  "assets": {
+    "apartment": 15,
+    "tower": 6,
+    "house": 18,
+    "tree": 227,
+    "hospital": 3,
+    "school": 3,
+    "hall": 1,
+    "cafe": 6,
+    "hotel": 5,
+    "shop": 5,
+    "wind-turbine": 9,
+    "solar-farm": 19,
+    "transmission-tower": 27,
+    "substation": 9,
+    "ess": 16,
+    "office": 6,
+    "playground": 3,
+    "fire-station": 3,
+    "pine": 187,
+    "park": 6,
+    "distribution": 28,
+    "pump-station": 1,
+    "power-plant": 1,
+    "water-treatment": 1,
+    "reservoir": 1,
+    "wastewater": 1,
+    "townhouses": 6,
+    "nuclear-plant": 1,
+    "smart-factory": 6,
+    "street-lamp": 106
+  },
+  "service": {
+    "consumers": 83,
+    "power": 83,
+    "water": 0,
+    "both": 0
+  },
+  "disconnectedPower": [],
+  "newPlotsWithoutRoadAccess": []
+}

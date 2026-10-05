@@ -1,0 +1,9 @@
+{
+  "scope": "Facilities, connections, traffic and streetlights; excludes terrain, roads, water and overlays. NullEngine structural counts, not GPU FPS.",
+  "visibleMeshes": 2654,
+  "geometryBatches": 232,
+  "geometries": 232,
+  "materials": 78,
+  "connectionMeshes": 6,
+  "connectionMaterials": 1
+}

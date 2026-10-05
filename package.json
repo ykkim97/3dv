@@ -12,6 +12,8 @@
     "desktop:dev": "tauri dev",
     "desktop:build": "tauri build",
     "lint": "eslint .",
+    "lint:city": "eslint src/features/city src/app/App.jsx",
+    "test:city": "node --test src/features/city/**/*.test.js",
     "preview": "vite preview",
     "build:wasm": "node scripts/build-wasm.mjs"
   },

@@ -1,8 +1,15 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { assetById, validateCity, terrainHeight, mapDimensions, footprint, containingPlot, plotProblem, placementProblem, levelPlot, roadProblem, closestRoadPoint, plotHasRoadAccess } from '../src/features/city/cityModel.js';
-import { roadTerrainWarning } from '../src/features/city/roadGeometry.js';
-import { waterRegions } from '../src/features/city/waterModel.js';
+import { assetById } from '../src/features/city/presets/catalog.js';
+import { validateCity } from '../src/features/city/core/cityValidation.js';
+import { terrainHeight, levelPlot } from '../src/features/city/terrain/terrainModel.js';
+import { mapDimensions } from '../src/features/city/core/mapDimensions.js';
+import { footprint, containingPlot } from '../src/features/city/placement/footprint.js';
+import { plotProblem, plotHasRoadAccess } from '../src/features/city/plots/plotModel.js';
+import { placementProblem } from '../src/features/city/placement/placementRules.js';
+import { roadProblem, closestRoadPoint } from '../src/features/city/roads/roadModel.js';
+import { roadTerrainWarning } from '../src/features/city/roads/roadGeometry.js';
+import { waterRegions } from '../src/features/city/water/waterModel.js';
 
 const source = process.argv[2];
 if (!source) throw new Error('Usage: node scripts/decorate-test-city.mjs input.city.json [output-directory]');

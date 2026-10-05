@@ -1,8 +1,9 @@
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import { NullEngine, Scene, MeshBuilder, ArcRotateCamera, Vector3 } from '@babylonjs/core';
-import { CityEngine } from '../src/features/city/CityEngine.js';
-import { validateCity, mapDimensions } from '../src/features/city/cityModel.js';
+import { CityEngine } from '../src/features/city/rendering/CityEngine.js';
+import { validateCity } from '../src/features/city/core/cityValidation.js';
+import { mapDimensions } from '../src/features/city/core/mapDimensions.js';
 
 const city = validateCity(JSON.parse(fs.readFileSync(process.argv[2] || 'artifacts/decorated-city/TEST_1_decorated.city.json', 'utf8')));
 const graphics = new NullEngine(), editor = Object.create(CityEngine.prototype);

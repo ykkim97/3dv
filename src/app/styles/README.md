@@ -1,6 +1,8 @@
 # Workspace styles
 
-`App.css` is the only stylesheet imported by the application shell. It composes focused global style layers:
+These style layers belong to the general scene editor workspace. The active city
+editor uses `src/features/city/editor/styles/cityEditor.css` and `cityHud.css`.
+Keep scene workspace styles separate from city HUD styles:
 
 - `layout.css`: application sizing and the three-column workspace.
 - `chrome.css`: top navigation and viewport command bar.
