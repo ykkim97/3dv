@@ -58,6 +58,19 @@ panels use the same inspector position and temporarily hide the selection inspec
 5. Test domain behavior beside the module. Use Babylon `NullEngine` for scene
    integration checks. Keep instancing, material reuse and light limits intact.
 
+## Facility properties
+
+Select a facility and edit **시설 속성** in the right inspector, then choose **적용**.
+Individual names, equipment codes, notes, operating state and optional power/water
+figures live in `objects[].properties`. Missing properties use the preset name and
+normal operating state; numeric values remain unset rather than assuming a capacity.
+Equipment codes are unique (ignoring case and surrounding whitespace). Copies retain
+configuration and receive a copy-name suffix, but clear the equipment code.
+All edits participate in undo/redo and JSON validation; locked facilities reject edits.
+Names and codes appear in the facility directory, plot list and connection endpoints.
+Property-only edits reuse existing facility geometry, flow batches and cached shadows.
+These are descriptive values for now; coverage still uses the existing range rules.
+
 ## Flow connections
 
 Open **흐름 연결** in the header, choose power/water/general styling, then click

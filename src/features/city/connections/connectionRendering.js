@@ -50,7 +50,8 @@ export const connectionRendering = {
       if (!connection.visible) continue;
       const from = objects.get(connection.from), to = objects.get(connection.to);
       if (!from || !to) continue;
-      const signature = JSON.stringify([connection, from, to, objectBaseHeight(this.city, from), objectBaseHeight(this.city, to)]);
+      const endpointGeometry = object => [object.asset, object.x, object.z, object.rotation, objectBaseHeight(this.city, object)];
+      const signature = JSON.stringify([connection, endpointGeometry(from), endpointGeometry(to)]);
       const previous = this.flowNodes.get(connection.id);
       if (!terrainChanged && previous?.signature === signature) { keep.add(connection.id); continue; }
       const points = connectionPath(this.city, connection, objects).map(p => new Vector3(p.x, p.y, p.z));

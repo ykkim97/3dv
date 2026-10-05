@@ -3,6 +3,7 @@ import { PRESETS, assetById, ROAD_TYPES } from '../presets/catalog.js';
 import { PLOT_SURFACES } from '../plots/plotModel.js';
 import { bridgeById } from '../presets/bridgePresets.js';
 import { validateConnections } from '../connections/connectionModel.js';
+import { validateFacilityProperties } from '../management/facilityProperties.js';
 
 export function validateCity(value) {
   if (value?.environment !== undefined) {
@@ -21,6 +22,7 @@ export function validateCity(value) {
   }
   const validPoint = p => p && Number.isFinite(p.x) && Number.isFinite(p.z) && Math.abs(p.x) <= half && Math.abs(p.z) <= half;
   if (!Array.isArray(value.objects) || value.objects.length > 5000 || value.objects.some(o => !validPoint(o) || !assetById[o.asset] || typeof o.id !== 'string' || !Number.isFinite(o.rotation))) throw new Error('시설 데이터가 올바르지 않습니다.');
+  validateFacilityProperties(value.objects);
   if (!Array.isArray(value.roads) || value.roads.length > 2000 || value.roads.some(r => typeof r.id !== 'string' || !ROAD_TYPES.some(t => t.id === r.type) || !validPoint(r.a) || !validPoint(r.b))) throw new Error('도로 데이터가 올바르지 않습니다.');
   if (!Array.isArray(value.plots) || value.plots.length > 1000 || value.plots.some(p => !validPoint(p) || typeof p.id !== 'string' || (p.surface !== undefined && !PLOT_SURFACES.some(surface => surface.id === p.surface)) || !Number.isFinite(p.width) || !Number.isFinite(p.depth) || p.width < 4 || p.width > 80 || p.depth < 4 || p.depth > 80 || Math.abs(p.x) + p.width / 2 > half || Math.abs(p.z) + p.depth / 2 > half)) throw new Error('부지 데이터가 올바르지 않습니다.');
   const all = [...value.objects, ...value.roads, ...value.plots];

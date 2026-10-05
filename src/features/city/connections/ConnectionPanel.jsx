@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { assetById } from '../presets/catalog.js';
+import { facilityName } from '../management/facilityProperties.js';
 import { CONNECTION_TYPES, DEFAULT_CONNECTION, FLOW_EFFECTS } from './connectionModel.js';
 import './connections.css';
 
@@ -10,7 +10,7 @@ export default function ConnectionPanel({ city, engine, mode, onMode, onChange, 
   const selected = connections.find(c => c.id === selectedId);
   const value = selected || draft;
   const objects = useMemo(() => new Map(city.objects.map(o => [o.id, o])), [city.objects]);
-  const label = id => { const o = objects.get(id); return o ? `${assetById[o.asset].name} (${o.x}, ${o.z})` : '시설 없음'; };
+  const label = id => { const o = objects.get(id); return o ? `${facilityName(o)}${o.properties?.code ? ` · ${o.properties.code}` : ''} (${o.x}, ${o.z})` : '시설 없음'; };
   const update = patch => selected ? onChange(c => ({ ...c, connections: c.connections.map(line => line.id === selected.id ? { ...line, ...patch } : line) })) : setDraft(d => ({ ...d, ...patch }));
   useEffect(() => {
     const instance = engine.current;

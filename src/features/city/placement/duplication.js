@@ -1,6 +1,7 @@
 import { assetById } from '../presets/catalog.js';
 import { footprint } from './footprint.js';
 import { placementProblem } from './placementRules.js';
+import { copiedFacilityProperties } from '../management/facilityProperties.js';
 
 export function planBuildingCopies(city, source, count, gap, direction) {
   if (!source || !Number.isInteger(count) || count < 1 || count > 12 || !Number.isFinite(gap) || gap < 0 || gap > 10 || !['x+', 'x-', 'z+', 'z-'].includes(direction)) return { copies: [], problem: '복제 개수, 간격 또는 방향을 확인해 주세요.' };
@@ -9,7 +10,7 @@ export function planBuildingCopies(city, source, count, gap, direction) {
   const draft = { ...city, objects: [...city.objects] };
   const copies = [];
   for (let i = 1; i <= count; i++) {
-    const candidate = { asset: source.asset, x: source.x + (axis === 'x' ? sign * (size.width + gap) * i : 0), z: source.z + (axis === 'z' ? sign * (size.depth + gap) * i : 0), rotation: source.rotation };
+    const candidate = { asset: source.asset, ...copiedFacilityProperties(source), x: source.x + (axis === 'x' ? sign * (size.width + gap) * i : 0), z: source.z + (axis === 'z' ? sign * (size.depth + gap) * i : 0), rotation: source.rotation };
     const problem = placementProblem(draft, candidate.asset, candidate.x, candidate.z, candidate.rotation);
     if (problem) return { copies: [], problem: `${i}번째 건물을 놓을 수 없습니다. ${problem}` };
     copies.push(candidate);
@@ -33,6 +34,7 @@ export function planGroupTransform(city, ids, action, offsetX = 0, offsetZ = 0) 
     const next = action === 'rotate'
       ? { ...object, x: centerX - (object.z - centerZ), z: centerZ + (object.x - centerX), rotation: object.rotation + Math.PI / 2 }
       : { ...object, x: object.x + offsetX, z: object.z + offsetZ };
+    if (action === 'copy') Object.assign(next, copiedFacilityProperties(object));
     const problem = placementProblem(draft, next.asset, next.x, next.z, next.rotation);
     if (problem) return { objects: [], problem: `${assetById[object.asset].name}: ${problem}` };
     objects.push(next);

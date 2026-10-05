@@ -8,7 +8,7 @@ import CopyControls from './components/CopyControls.jsx';
 import PlotObjectList from './components/PlotObjectList.jsx';
 import SurfacePicker from './components/SurfacePicker.jsx';
 import AssetPreview from './components/AssetPreview.jsx';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CityEngine } from '../rendering/CityEngine.js';
 import { ASSETS, assetById, BRUSHES, CATEGORIES, PRESETS, ROAD_TYPES, PLOT_TYPES } from '../presets/catalog.js';
 import { MAP_SIZES, mapDimensions } from '../core/mapDimensions.js';
@@ -26,6 +26,8 @@ import { calculateFireService } from '../simulation/fireService.js';
 import { analyzeCity } from '../management/cityDiagnostics.js';
 import { defaultMapLayers, managementMetrics, compareManagementMetrics } from '../management/cityManagement.js';
 import { FacilityDirectory, MapLayerControls, EditResults } from '../management/FacilityManagement.jsx';
+import FacilityPropertiesPanel from '../management/FacilityPropertiesPanel.jsx';
+import { facilityName, facilityStatus, updateFacilityProperties } from '../management/facilityProperties.js';
 import { roadTerrainWarning } from '../roads/roadGeometry.js';
 import { waterRegions, waterSettings } from '../water/waterModel.js';
 import WaterPanel, { WaterControls } from '../water/WaterPanel.jsx';
@@ -44,6 +46,7 @@ import './styles/cityHud.css';
 import './styles/cityToolbar.css';
 
 const STORAGE_KEY = 'lumatrix-city-v1';
+const ManualDialog = lazy(() => import('../manual/ManualDialog.jsx'));
 function initialCity() {
   try { const saved = localStorage.getItem(STORAGE_KEY); if (saved) return validateCity(JSON.parse(saved)); } catch { /* Invalid saves must not block the editor. */ }
   return createCity('river');
@@ -148,6 +151,11 @@ export default function CityEditor() {
   useEffect(() => { engine.current?.setOptions({ mode, asset, brush, paintColor, road, plot, radius, strength, rotation, surface, align, gap, movingId, roadShape, roadContinuous, boxSelect, bridge }); }, [mode, asset, brush, paintColor, road, plot, radius, strength, rotation, surface, align, gap, movingId, roadShape, roadContinuous, boxSelect, bridge]);
   useEffect(() => { engine.current?.setGridVisible(gridVisible); }, [gridVisible]);
   useEffect(() => {
+    const instance = engine.current;
+    if (instance) instance.renderPaused = helpOpen;
+    return () => { if (instance) instance.renderPaused = false; };
+  }, [helpOpen]);
+  useEffect(() => {
     if (engine.current) engine.current.onConnectionSelect = id => { setLightingOpen(false); setConnectionsOpen(true); setSelectedConnection(id); setMode('select'); };
   });
   useEffect(() => { engine.current?.setInfoVisible(infoVisible); }, [infoVisible]);
@@ -160,6 +168,7 @@ export default function CityEditor() {
   }, [selected, selectedIds, applyBatchAction]);
   useEffect(() => {
     const keydown = event => {
+      if (helpOpen) return;
       if (['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target.tagName) || event.target.isContentEditable) return;
       const key = event.key.toLowerCase();
       if (key === 'escape') { setHeaderMenu(null); setConnectionsOpen(false); setLightingOpen(false); setBoxSelect(false); setMode('select'); setMovingId(null); setSelected(null); setPresetsOpen(false); setHelpOpen(false); setDiagnosticsOpen(false); setDirectoryOpen(false); setWaterOpen(false); setDistrictOpen(false); setLifeOpen(false); setCameraOpen(false); engine.current?.cancelPlotDraft(); if (engine.current) engine.current.roadStart = null; }
@@ -170,7 +179,7 @@ export default function CityEditor() {
       if (key === 'delete') removeSelected();
     };
     window.addEventListener('keydown', keydown); return () => window.removeEventListener('keydown', keydown);
-  }, [undo, redo, save, removeSelected, setSelected]);
+  }, [undo, redo, save, removeSelected, setSelected, helpOpen]);
   const selectCategory = id => { engine.current?.cancelPlotDraft(); setMovingId(null); setCategory(id); setSearch(''); setTrayOpen(true); setMode(['terrain', 'road', 'plot'].includes(id) ? id : 'select'); };
   const rotateSelected = () => {
     const o = city.objects.find(item => item.id === selected);
@@ -310,6 +319,7 @@ export default function CityEditor() {
         <div className="menu-view-actions"><button onClick={() => { if (engine.current) engine.current.camera.radius = Math.max(25, engine.current.camera.radius * 0.8); }}><Icon name="plus" size={16} /> 확대</button><button onClick={() => { if (engine.current) engine.current.camera.radius = Math.min(mapDimensions(city).cameraLimit, engine.current.camera.radius * 1.2); }}><Icon name="minus" size={16} /> 축소</button></div>
         <button onClick={() => { setHeaderMenu(null); setCameraOpen(true); }}><Icon name="save" size={16} /> 시점 · 이미지 저장</button>
       </HeaderMenu>
+      <button className="directory-trigger" aria-label="???" title="?? ???" onClick={() => { setHeaderMenu(null); setHelpOpen(true); }}><Icon name="help" size={17} /><span className="hud-button-text">???</span></button>
       <div className="header-actions"><span className="save-state">{saved ? '저장됨' : '로컬 프로젝트'}</span><button aria-label="도시 파일 불러오기" title="도시 파일 불러오기" onClick={() => fileInput.current.click()}><Icon name="folder" size={18} /></button><button aria-label="도시 파일 내보내기" title="도시 파일 내보내기" onClick={() => setExportOpen(true)}><Icon name="download" size={18} /></button><button className="save-button" onClick={save}><Icon name="save" size={16} /> 도시 저장</button></div><input type="file" accept=".json" ref={fileInput} hidden onChange={importCity} />
     </header>
     <div className="world-heading"><span className="eyebrow">YOUR NEXT GREAT CITY</span><h1>부지에서 시작하는 나의 도시.</h1><p>격자 위에 부지를 놓고, 그 안에 도시를 채워 보세요.</p><div className="getting-started"><button className={category === 'plot' ? 'current' : ''} onClick={() => selectCategory('plot')}><span>01</span> 부지 조성</button><i>→</i><button className={['residential', 'commercial', 'landmark', 'power', 'water', 'nature'].includes(category) ? 'current' : ''} onClick={() => selectCategory('residential')}><span>02</span> 시설 배치</button><i>→</i><button className={category === 'road' ? 'current' : ''} onClick={() => selectCategory('road')}><span>03</span> 도로 연결</button></div></div>
@@ -318,12 +328,14 @@ export default function CityEditor() {
     {lightingOpen && <LightingPanel value={city.environment} engine={engine} onChange={environment => commit({ ...city, environment })} onClose={() => setLightingOpen(false)} />}
     {!connectionsOpen && !lightingOpen && (object || selectedRoad || selectedPlot || selectedWater || groupItems.length > 1) && <section key={selected || 'group'} className="selection-panel glass">
       <div className="panel-label">{groupItems.length > 1 ? '다중 선택' : selectedPlot ? '선택한 부지' : '선택한 시설'}<button aria-label="선택 해제" onClick={() => { setSelected(null); if (mode === 'move') { setMode('select'); setMovingId(null); } }}><Icon name="close" size={15} /></button></div>
-      <h2>{groupItems.length > 1 ? `${groupItems.length}개 대상` : selectedWater ? `수역 ${waters.indexOf(selectedWater) + 1}` : selectedPlot ? '건설 부지' : object ? assetById[object.asset].name : bridgeById[selectedRoad.bridge]?.name || ROAD_TYPES.find(t => t.id === selectedRoad.type).name}</h2>
+      <h2>{groupItems.length > 1 ? `${groupItems.length}개 대상` : selectedWater ? `수역 ${waters.indexOf(selectedWater) + 1}` : selectedPlot ? '건설 부지' : object ? facilityName(object) : bridgeById[selectedRoad.bridge]?.name || ROAD_TYPES.find(t => t.id === selectedRoad.type).name}</h2>
       {groupItems.length > 1 ? <BatchControls items={groupItems} dx={groupDx} dz={groupDz} setDx={setGroupDx} setDz={setGroupDz} onAction={applyBatchAction} onLock={lockSelection} /> : <>
         <p>{selectedWater ? '연결된 개별 수면 · 지형을 유지한 채 물을 비울 수 있습니다.' : selectedPlot ? `${selectedPlot.width} × ${selectedPlot.depth} m · ${plotSurface(selectedPlot.surface).name} · 높이 +0.3 m` : object ? assetById[object.asset].detail : `${Math.hypot(selectedRoad.a.x - selectedRoad.b.x, selectedRoad.a.z - selectedRoad.b.z).toFixed(1)} m · 도로 구간`}</p>
+        {object && <div className="facility-status" data-status={facilityStatus(object).id}><span>{facilityStatus(object).name}</span>{object.properties?.code && <span>· {object.properties.code}</span>}</div>}
         {(object || selectedPlot || selectedRoad) && <><button aria-pressed={!!(object || selectedPlot || selectedRoad).locked} onClick={() => lockSelection(!(object || selectedPlot || selectedRoad).locked)}>{(object || selectedPlot || selectedRoad).locked ? '잠금 해제' : '선택 잠금'}</button>{(selectedPlot || selectedRoad) && <details className="inspector-details"><summary>이동·복제·삭제</summary><BatchControls items={groupItems} dx={groupDx} dz={groupDz} setDx={setGroupDx} setDz={setGroupDz} onAction={applyBatchAction} onLock={lockSelection} /></details>}</>}
         {selectedWater && <><WaterControls settings={waterSettings(city, selectedWater)} onChange={patch => changeWater(patch, selectedWater)} /><button onClick={() => setWaterOpen(true)}>전체 수역 설정</button><button onClick={() => engine.current?.focusEntity(selected)}>수역 위치로 이동</button></>}
         {selectedRoad && <div className="road-edit-controls"><p>초록색 끝점을 드래그해 길이·방향을 조절하세요.{selectedRoad.bridge && ' 교량 끝은 육지에 연결해야 합니다.'}</p><div role="group" aria-label="선택 도로 종류">{selectedRoad.bridge ? BRIDGE_PRESETS.map(preset => <button key={preset.id} aria-pressed={selectedRoad.bridge === preset.id} onClick={() => changeBridgePreset(preset.id)}>{preset.name}<small>{preset.min}~{preset.max} m</small></button>) : ROAD_TYPES.map(type => <button key={type.id} aria-pressed={selectedRoad.type === type.id} onClick={() => changeRoadType(type.id)}>{type.name}<small>폭 {type.width} m</small></button>)}</div>{roadTerrainWarning(city, selectedRoad) && <p className="road-slope-warning">{roadTerrainWarning(city, selectedRoad)}</p>}</div>}
+        {object && <FacilityPropertiesPanel key={`${object.id}:${JSON.stringify(object.properties || {})}`} object={object} onApply={draft => { const next = updateFacilityProperties(city, object.id, draft); commit(next); setNotice('시설 속성을 저장했습니다.'); }} />}
         {object && <details className="inspector-details"><summary>공급·서비스 상태</summary><ServiceStatus coverage={service.consumers.get(object.id)} facility={service.facilities.get(object.id)} service={service} /><FireStatus building={fire.buildings.get(object.id)} station={fire.stations.get(object.id)} /></details>}
         {object && <RoleStatus object={object} diagnostics={diagnostics} />}
         {(object || selectedPlot || selectedRoad) && <button onClick={() => engine.current?.focusEntity(selected)}><Icon name="compass" size={16} /> 선택 위치로 이동</button>}
@@ -350,7 +362,7 @@ export default function CityEditor() {
     <footer className="city-status"><div><span className="status-dot" /><b>{modeLabel}</b><span className="status-separator" />{mode === 'connect' ? '출발 시설 A → 도착 시설 B 클릭 · Esc 취소' : mode === 'plot' ? '첫 클릭: 시작점 · 마우스로 크기 조정 · 다시 클릭: 확정' : mode === 'select' ? '클릭 선택 · Shift + 드래그 또는 범위 선택 버튼' : mode === 'terrain' ? `왼쪽 드래그로 지형 편집 · 반경 ${radius} m` : mode === 'road' ? '시작점 → 끝점 클릭' : mode === 'bulldoze' ? '시설을 클릭하여 철거' : mode === 'move' ? '선택한 건물을 새 위치로 옮기기 · Esc 취소' : `프리셋 모양 확인 → ${align ? '부지·건물 자동 정렬' : '2 m 격자에 맞춤'} · R 회전 · Esc 취소`}</div><div className="navigation-hint">우클릭 회전 <span>·</span> 휠 클릭 이동 <span>·</span> 스크롤 확대<button aria-label="사용법" onClick={() => setHelpOpen(true)}><Icon name="help" size={16} /></button></div><button className="mobile-help" aria-label="사용법 열기" onClick={() => setHelpOpen(true)}><Icon name="help" size={16} /></button></footer>
     {notice && <div className="city-toast glass" role="status"><Icon name="check" size={17} />{notice}</div>}{error && <div className="engine-error glass" role="alert">{error}</div>}
     {presetsOpen && <div className="modal-backdrop" onClick={() => setPresetsOpen(false)}><section className="preset-modal glass" role="dialog" aria-modal="true" aria-label="도시·지도 설정" onClick={e => e.stopPropagation()}><button className="modal-close" aria-label="프리셋 닫기" onClick={() => setPresetsOpen(false)}><Icon name="close" /></button><h2>도시 · 지도 설정</h2><section className="current-map-settings" aria-label="현재 도시 지도 확장"><b>현재 도시 · {city.name}</b><p>지도 {mapDimensions(city).size} × {mapDimensions(city).size} m · 지형 간격 2 m</p>{mapDimensions(city).size < 480 ? <><p>기존 건물·도로·지형을 유지하면서 바깥에 새 땅을 추가합니다. 전체 면적이 4배로 늘어납니다.</p><button className="map-expand-button" onClick={expandCurrentCity}>현재 도시를 480 × 480 m로 확장</button></> : <p>현재 지원하는 최대 지도 크기입니다.</p>}</section><span className="eyebrow">새 도시 만들기</span><h3>어떤 도시를 만들어 볼까요?</h3><p>새로운 지형과 도시 배치로 시작합니다. 현재 도시는 실행 취소로 되돌릴 수 있습니다.</p><label className="map-size-control">지도 크기<select value={newMapSize} onChange={event => setNewMapSize(Number(event.target.value))}>{MAP_SIZES.map(size => <option key={size} value={size}>{size === 240 ? '소형' : '중형'} · {size} × {size} m</option>)}</select></label><div className="preset-grid">{PRESETS.map(p => <button className={`preset-card preset-${p.id}`} key={p.id} onClick={() => { commit(createCity(p.id, newMapSize)); setSelected(null); setMode('select'); setPresetsOpen(false); engine.current?.view('home'); setNotice(`${p.name} 프리셋을 불러왔습니다.`); }}><div className="preset-art"><span className="preset-river" /><Icon name={p.id === 'alpine' ? 'terrain' : p.id === 'blank' ? 'plus' : 'building'} size={42} /></div><span className="eyebrow">{p.tag}</span><h3>{p.name}</h3><p>{p.subtitle}</p></button>)}</div><div className="preset-footnote">모든 프리셋은 자유롭게 편집할 수 있습니다. · 외부 지도 연결 없이 사용 가능</div></section></div>}
-    {helpOpen && <div className="modal-backdrop" onClick={() => setHelpOpen(false)}><section className="help-modal glass" role="dialog" aria-modal="true" aria-label="사용법" onClick={e => e.stopPropagation()}><button className="modal-close" aria-label="사용법 닫기" onClick={() => setHelpOpen(false)}><Icon name="close" /></button><span className="eyebrow">MAKE YOURSELF AT HOME</span><h2>도시 만들기, 이렇게 시작하세요.</h2><p>시설 카드를 클릭하면 3D 미리보기가 격자를 따라 움직입니다. 초록색은 배치 가능한 자리, 붉은색은 겹치거나 부적합한 자리입니다. 원하는 위치에서 다시 클릭하세요. 자동 정렬을 켜면 부지 중심·경계와 기존 건물에 맞춰집니다. 여러 시설은 Shift + 클릭으로 함께 선택하여 이동·회전·복제할 수 있습니다. 선택한 시설은 이동하거나 개수·방향·간격을 정해 연속 복제할 수 있습니다. 부지를 선택하면 그 안의 시설을 목록에서 선택·이동·철거할 수 있습니다. 시설은 조성된 부지 안에만 배치할 수 있습니다. 먼저 부지를 만들어 주세요.</p><p>부지는 첫 모서리를 클릭한 뒤 마우스로 가로와 세로 길이를 조정하고 다시 클릭해 확정합니다. 마우스 버튼을 누른 채 끌어도 크기가 변합니다. Esc로 취소할 수 있습니다.</p><p>도로는 직선·곡선·원형을 선택해 배치합니다. 곡선은 시작점·끝점·곡률을 순서대로 클릭하고, 원형은 중심점·반경을 지정합니다. 연속 배치는 Esc로 종료합니다. 범위 선택 버튼으로 건물·부지·도로를 함께 선택할 수 있고, 잠긴 대상은 편집되지 않습니다. 상단에서 구역 관리와 도시 생활 연출을 설정할 수 있습니다. 지형 브러시의 원은 편집 반경을 표시하며, 왼쪽 버튼을 누른 채 드래그하면 지형이 변합니다.</p><dl><dt>카메라 회전 / 이동</dt><dd>우클릭 드래그 / 휠 클릭 드래그</dd><dt>확대 / 축소</dt><dd>마우스 스크롤</dd><dt>실행 취소 / 다시 실행</dt><dd>Ctrl Z / Ctrl Shift Z</dd><dt>도시 저장</dt><dd>Ctrl S · 현재 브라우저에 저장</dd></dl><p>상단 파일 버튼으로 도시를 내보내고 다시 불러올 수 있습니다. 이 도구는 도시 설계용이며 교통·경제 시뮬레이션은 포함하지 않습니다.</p></section></div>}
+    {helpOpen && <Suspense fallback={<div className="city-toast glass" role="status">???? ???? ??</div>}><ManualDialog onClose={() => setHelpOpen(false)} /></Suspense>}
     {directoryOpen && <FacilityDirectory city={city} onClose={() => setDirectoryOpen(false)} onSelect={locateFacility} />}
     {exportOpen && <CityExportPanel cityName={city.name} onClose={() => setExportOpen(false)} onSave={exportCity} />}
     {cameraOpen && <CameraPanel views={city.cameraViews || []} onClose={() => setCameraOpen(false)} onAdd={name => { if (engine.current) { const view = { id: crypto.randomUUID(), name, ...engine.current.cameraState() }; commit(current => ({ ...current, cameraViews: [...current.cameraViews || [], view] })); } }} onRemove={id => commit(current => ({ ...current, cameraViews: current.cameraViews.filter(view => view.id !== id) }))} onView={view => { engine.current?.restoreCamera(view); setCameraOpen(false); }} onExport={exportImage} />}

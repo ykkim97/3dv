@@ -2,6 +2,7 @@ import { roadProblem } from '../roads/roadModel.js';
 import { plotProblem } from '../plots/plotModel.js';
 import { placementProblem } from './placementRules.js';
 import { levelPlot } from '../terrain/terrainModel.js';
+import { copiedFacilityProperties } from '../management/facilityProperties.js';
 
 export function roadDraft(start, end, shape = 'straight', control = null) {
   if (shape === 'straight') return [start, end];
@@ -60,6 +61,7 @@ export function planBatch(city, ids, action, dx = 0, dz = 0) {
   const chains = new Map();
   const translate = item => {
     const result = { ...item, id: remap.get(item.id) };
+    if (action === 'copy' && item.asset) Object.assign(result, copiedFacilityProperties(item));
     if (item.a) {
       result.a = { x: item.a.x + dx, z: item.a.z + dz }; result.b = { x: item.b.x + dx, z: item.b.z + dz };
       if (action === 'copy' && item.chainId) { if (!chains.has(item.chainId)) chains.set(item.chainId, crypto.randomUUID()); result.chainId = chains.get(item.chainId); }

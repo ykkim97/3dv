@@ -100,6 +100,7 @@ export class CityEngine {
     this.resize.observe(canvas);
     this.engine.resize();
     this.engine.runRenderLoop(() => {
+      if (this.renderPaused) return;
       try { this.tickDaylight(this.engine.getDeltaTime() / 1000); this.tickConnections(this.engine.getDeltaTime() / 1000); this.life?.tick(Math.min(0.06, this.engine.getDeltaTime() / 1000)); this.scene.render(); }
       catch (error) {
         if (!this.renderErrorReported) { this.renderErrorReported = true; this.onRenderError?.(`3D 장면 렌더링 오류: ${error.message}`); }
@@ -158,8 +159,10 @@ export class CityEngine {
     const terrainChanged = !previous || previous.heights.length !== city.heights.length || previous.heights.some((h, i) => h !== city.heights[i]);
     const paintChanged = !previous || previous.terrainPaint !== city.terrainPaint && JSON.stringify(previous.terrainPaint) !== JSON.stringify(city.terrainPaint);
     const roadsChanged = !previous || JSON.stringify(previous.roads) !== JSON.stringify(city.roads);
-    const oldRecords = new Map(previous ? [...previous.objects, ...previous.roads, ...previous.plots].map(o => [o.id, JSON.stringify(o)]) : []);
-    const nextRecords = new Map([...city.objects, ...city.roads, ...city.plots].map(o => [o.id, JSON.stringify(o)]));
+    // Facility properties describe equipment; they do not change its geometry.
+    const renderRecord = object => JSON.stringify({ ...object, properties: undefined });
+    const oldRecords = new Map(previous ? [...previous.objects, ...previous.roads, ...previous.plots].map(o => [o.id, renderRecord(o)]) : []);
+    const nextRecords = new Map([...city.objects, ...city.roads, ...city.plots].map(o => [o.id, renderRecord(o)]));
     const dimensions = mapDimensions(city);
     if (this.terrain && this.terrain.getTotalVertices() !== (dimensions.resolution + 1) ** 2) {
       const material = this.terrain.material;
