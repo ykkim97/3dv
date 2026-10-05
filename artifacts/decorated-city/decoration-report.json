@@ -1,0 +1,21 @@
+{
+  "name": "리버가든 시티",
+  "addedFacilities": 55,
+  "addedTrees": 447,
+  "addedRoads": 27,
+  "addedPlots": 12,
+  "districts": 8,
+  "original": {
+    "objects": 57,
+    "roads": 27,
+    "plots": 9
+  },
+  "total": {
+    "objects": 559,
+    "roads": 54,
+    "plots": 21
+  },
+  "unconnectedNewPlots": [],
+  "slopeWarnings": [],
+  "waterRegions": 1
+}

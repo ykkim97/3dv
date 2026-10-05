@@ -1,0 +1,16 @@
+import { ROAD_TYPES } from './cityModel.js';
+import { BRIDGE_PRESETS } from './bridgePresets.js';
+
+function BridgePreview({ preset }) {
+  return <svg className="bridge-card-preview" viewBox="0 0 160 68" aria-hidden="true"><path d="M5 54h150" stroke="#688b7b" strokeWidth="2" /><path d="M14 43 Q80 37 146 43" stroke="#c5d1b9" strokeWidth="5" fill="none" /><path d="M45 43v12M115 43v12" stroke="#9aafa1" strokeWidth="5" />
+    {preset.style === 'arch' && <><path d="M15 42 Q80 -4 145 42" fill="none" stroke="#ddcf9f" strokeWidth="3" />{[35, 55, 80, 105, 125].map(x => <path key={x} d={`M${x} 41v-${x === 80 ? 23 : x === 55 || x === 105 ? 20 : 13}`} stroke="#a5bdab" />)}</>}
+    {['cable', 'suspension'].includes(preset.style) && <><path d="M47 43V10M113 43V10" stroke="#d0dccb" strokeWidth="4" />{preset.style === 'cable' ? [15, 29, 65, 79, 95, 130, 145].map((x, i) => <path key={x} d={`M${i < 4 ? 47 : 113} 12L${x} 42`} stroke="#dfcc91" strokeWidth="1.2" />) : <><path d="M14 42L47 11Q80 48 113 11L146 42" stroke="#dfcc91" fill="none" strokeWidth="2" />{[57, 68, 80, 92, 103].map(x => <path key={x} d={`M${x} ${x === 80 ? 29 : x === 68 || x === 92 ? 26 : 21}V42`} stroke="#b6c8a8" />)}</>}</>}
+    {preset.style === 'beam' && <path d="M16 36h128M22 36v7m12-7v7m12-7v7m12-7v7m12-7v7m12-7v7m12-7v7m12-7v7m12-7v7m12-7v7" stroke={preset.id === 'footbridge' ? '#d2ad7e' : '#a9c5b1'} fill="none" />}
+  </svg>;
+}
+export default function RoadLibrary({ road, bridge, mode, shape, continuous, onShape, onContinuous, onRoad, onBridge, onFinish }) {
+  return <div><div className="road-shape-controls"><div className="road-library-kind" role="group" aria-label="도로 또는 교량"><button aria-pressed={!bridge} onClick={() => onRoad(road)}>도로</button><button aria-pressed={!!bridge} onClick={() => onBridge(bridge || 'small')}>교량</button></div>{!bridge && <label>형태<select aria-label="도로 형태" value={shape} onChange={e => onShape(e.target.value)}><option value="straight">직선</option><option value="curve">곡선</option><option value="roundabout">원형 도로</option></select></label>}<label><input type="checkbox" checked={continuous} onChange={e => onContinuous(e.target.checked)} />연속 배치</label><button onClick={onFinish}>배치 종료</button></div>
+    <p className="road-placement-hint">{bridge ? '육지 시작점 → 반대편 육지 끝점 클릭 · 기존 도로 끝·중심선에 자동 연결' : shape === 'curve' ? '시작점 → 끝점 → 곡률 조절 후 클릭' : shape === 'roundabout' ? '중심 클릭 → 반경 조절 후 클릭 · 반경 8~40 m' : '시작점 → 끝점 클릭 · 기존 도로에 자동 연결'} · Esc로 종료 · 부지는 직접 조성합니다.</p>
+    <div className="asset-list">{bridge ? BRIDGE_PRESETS.map(preset => <button key={preset.id} className={`asset-card bridge-card ${mode === 'road' && bridge === preset.id ? 'selected' : ''}`} onClick={() => onBridge(preset.id)}><BridgePreview preset={preset} /><b>{preset.name}</b><small>{preset.detail}</small><span className="asset-size">{preset.type === 'path' ? '보행 전용' : preset.type === 'avenue' ? '4차선' : '2차선'} · 길이 {preset.min}~{preset.max} m</span></button>) : ROAD_TYPES.map(type => <button key={type.id} className={`asset-card road-card ${mode === 'road' && road === type.id ? 'selected' : ''}`} onClick={() => onRoad(type.id)}><div className={`road-preview ${type.id}`}><span /><span /><span /></div><b>{type.name}</b><small>{type.detail}</small><span className="asset-size">폭 {type.width} m</span></button>)}</div>
+  </div>;
+}
