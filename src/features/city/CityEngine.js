@@ -5,6 +5,7 @@ import { Vector3, Matrix } from '@babylonjs/core/Maths/math.vector.js';
 import { Color3, Color4 } from '@babylonjs/core/Maths/math.color.js';
 import { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight.js';
 import { DirectionalLight } from '@babylonjs/core/Lights/directionalLight.js';
+import { PointLight } from '@babylonjs/core/Lights/pointLight.js';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial.js';
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder.js';
 import { Mesh } from '@babylonjs/core/Meshes/mesh.js';
@@ -37,6 +38,9 @@ import { roadDraft, planRoadDraft } from './cityExpansion.js';
 import { CityLife } from './CityLife.js';
 import { buildBridgeDetails } from './bridgeGeometry.js';
 import { bridgeById } from './bridgePresets.js';
+import { buildStreetProp } from './streetProps.js';
+import { DEFAULT_ENVIRONMENT, daylightAt, advanceHour } from './dayLighting.js';
+import { closestRoadPoint } from './cityModel.js';
 
 export class CityEngine {
   constructor(canvas, onChange, onSelect, onMessage, onBrushMove, onRenderError) {
@@ -98,7 +102,7 @@ export class CityEngine {
     this.resize.observe(canvas);
     this.engine.resize();
     this.engine.runRenderLoop(() => {
-      try { this.life?.tick(Math.min(0.06, this.engine.getDeltaTime() / 1000)); this.scene.render(); }
+      try { this.tickDaylight(this.engine.getDeltaTime() / 1000); this.life?.tick(Math.min(0.06, this.engine.getDeltaTime() / 1000)); this.scene.render(); }
       catch (error) {
         if (!this.renderErrorReported) { this.renderErrorReported = true; this.onRenderError?.(`3D 장면 렌더링 오류: ${error.message}`); }
       }
@@ -373,7 +377,16 @@ export class CityEngine {
     const root = new TransformNode(object.id, this.scene);
     root.metadata = { objectId: object.id };
     this.nodes.push(root);
-    if (object.asset === 'tree' || object.asset === 'pine') this.tree(0, 0, object.asset === 'pine', root);
+    const prop = asset.category === 'streetscape', preview = object.id === '__placement-preview';
+    this.propTemplates ||= new Map();
+    const template = prop && this.propTemplates.get(asset.id);
+    if (template) {
+      for (const source of template) {
+        const mesh = preview ? source.clone(`preview-${asset.id}`, root) : source.createInstance(`${asset.id}-${object.id}`);
+        mesh.parent = root; mesh.isVisible = true; mesh.metadata = { objectId: object.id }; mesh.receiveShadows = true;
+      }
+    } else if (prop) buildStreetProp(this, asset, root);
+    else if (object.asset === 'tree' || object.asset === 'pine') this.tree(0, 0, object.asset === 'pine', root);
     else if (object.asset === 'park') {
       this.box('lawn', 10, 0.15, 10, 0, 0.08, 0, this.material('lawn', '#7a9f65'), root);
       this.box('walk', 1.3, 0.18, 10, 0, 0.12, 0, this.material('walk', '#d0c6a8'), root);
@@ -407,10 +420,31 @@ export class CityEngine {
         this.box('cross', 0.6, 2, 0.13, 0, h - 1, -d / 2 - 0.03, red, root);
       }
     }
-    this.compact(root, { objectId: object.id }, true);
-    root.position.set(object.x, objectBaseHeight(this.city, object), object.z);
+    if (!template) this.compact(root, { objectId: object.id }, !prop);
+    if (prop && !template) {
+      this.propTemplates.set(asset.id, root.getChildMeshes().map(mesh => {
+        const source = mesh.clone(`template-${asset.id}`, null);
+        source.parent = null; source.isVisible = false; source.isPickable = false; source.metadata = null;
+        return source;
+      }));
+    }
+    root.position.set(object.x, this.placementBaseHeight(object), object.z);
     root.rotation.y = object.rotation;
     return root;
+  }
+  placementBaseHeight(object) {
+    let height = objectBaseHeight(this.city, object);
+    const asset = assetById[object.asset];
+    if (asset.id === 'crosswalk') {
+      const road = this.city.roads.find(road => {
+        const point = closestRoadPoint(road, object);
+        const width = ROAD_TYPES.find(type => type.id === road.type).width;
+        return Math.hypot(point.x - object.x, point.z - object.z) < width / 2;
+      });
+      if (road) height = Math.max(height, ...roadProfile(this.city, road, this.roadConnections || []).samples
+        .filter(p => Math.hypot(p.x - object.x, p.z - object.z) < 5).map(p => p.height + 0.24));
+    }
+    return height;
   }
   compact(root, metadata, castShadow = false) {
     const groups = new Map();
@@ -609,12 +643,16 @@ export class CityEngine {
       }
     }
     this.city = structuredClone(city);
+    if (!previous || JSON.stringify(previous.environment) !== JSON.stringify(city.environment)) {
+      this.environment = { ...DEFAULT_ENVIRONMENT, ...city.environment }; this.hour = this.environment.hour;
+    }
     this.renderedCity = city;
     if (terrainChanged || roadsChanged) this.roadConnections = roadJunctions(this.city);
     this.plotEdit = null;
     this.clearPreview(); this.roadStart = this.pendingRoadStart || null; this.pendingRoadStart = null; this.roadEnd = null; this.plotStart = null; this.plotDraft = null; this.plotMoved = false;
+    const crosswalkIds = new Set(city.objects.filter(o => o.asset === 'crosswalk').map(o => o.id));
     this.nodes = this.nodes.filter(n => {
-      if (oldRecords.get(n.name) !== nextRecords.get(n.name) || !nextRecords.has(n.name) || (terrainChanged && !n.metadata.objectId) || (roadsChanged && n.metadata.roadId)) {
+      if (oldRecords.get(n.name) !== nextRecords.get(n.name) || !nextRecords.has(n.name) || (terrainChanged && !n.metadata.objectId) || (roadsChanged && (n.metadata.roadId || crosswalkIds.has(n.name)))) {
         n.getChildMeshes().forEach(m => this.shadows.removeShadowCaster(m)); n.dispose(); return false;
       }
       return true;
@@ -625,6 +663,8 @@ export class CityEngine {
     city.plots.filter(p => !kept.has(p.id)).forEach(p => this.buildPlot(p));
     city.roads.filter(r => !kept.has(r.id)).forEach(r => this.buildRoad(r));
     city.objects.filter(o => !kept.has(o.id)).forEach(o => this.buildObject(o));
+    const lampIds = new Set(city.objects.filter(o => ['street-lamp', 'bus-stop'].includes(o.asset)).map(o => o.id));
+    this.propLightNodes = this.nodes.filter(node => lampIds.has(node.name));
     if (terrainChanged) this.updateGrid();
     if (terrainChanged || roadsChanged) this.updateJunctions();
     if (terrainChanged || !previous || JSON.stringify(previous.waterSettings) !== JSON.stringify(city.waterSettings)) this.updateWater();
@@ -635,6 +675,7 @@ export class CityEngine {
     this.updateDistricts();
     this.refreshInfoOverlay();
     this.updateServiceGuides();
+    if (this.sun && this.ambient) this.setTimeOfDay(this.hour ?? 12);
   }
   setInfoVisible(visible) { this.infoVisible = visible; this.refreshInfoOverlay(); this.updateServiceGuides(); }
   updateWater() {
@@ -755,7 +796,7 @@ export class CityEngine {
     this.updateTerrainSides(positions);
     for (const node of this.nodes) if (node.metadata?.objectId) {
       const object = this.city.objects.find(item => item.id === node.metadata.objectId);
-      if (object) node.position.y = objectBaseHeight(this.city, object);
+      if (object) node.position.y = this.placementBaseHeight(object);
     }
   }
   updateTerrainColors() {
@@ -1139,7 +1180,7 @@ export class CityEngine {
         this.preview.position.set(centerX, y - PLOT_ELEVATION / 2, centerZ);
         this.preview.scaling.set(rect.width, 1, rect.depth);
       } else {
-        this.preview.position.set(centerX, y, centerZ);
+        this.preview.position.set(centerX, this.placementBaseHeight({ asset: asset.id, x: centerX, z: centerZ, rotation }), centerZ);
         this.preview.rotation.y = rotation;
       }
       const problem = isPlot ? plotProblem(this.city, rect) : placementProblem(this.city, asset.id, centerX, centerZ, rotation, moving?.id);
@@ -1420,13 +1461,62 @@ export class CityEngine {
     } else if (road) this.focusPoint((road.a.x + road.b.x) / 2, (road.a.z + road.b.z) / 2, Math.max(40, Math.hypot(road.a.x - road.b.x, road.a.z - road.b.z) * 1.4));
   }
   setNight(night) {
+    this.setTimeOfDay(night ? 0 : 12);
+  }
+  previewTimeOfDay(hour) {
+    if (this.environment) this.environment.autoCycle = false;
+    this.setTimeOfDay(hour);
+  }
+  tickDaylight(seconds) {
+    if (this.environment?.autoCycle) this.hour = advanceHour(this.hour ?? 12, seconds, this.environment.cycleMinutes);
+    this.lightingElapsed = (this.lightingElapsed || 0) + seconds;
+    if (this.lightingElapsed < 0.25) return;
+    this.lightingElapsed = 0;
+    if (this.environment?.autoCycle) this.setTimeOfDay(this.hour);
+    else this.updateLocalLights();
+  }
+  updateLocalLights() {
+    if (!this.city || !this.camera) return;
+    // Every lamp emits visually, but only two nearby lamps illuminate surfaces.
+    // Keep the total at four lights (sky, sun, two local), without local shadows.
+    this.localLights ||= Array.from({ length: 2 }, (_, i) => {
+      const light = new PointLight(`nearby-street-light-${i}`, Vector3.Zero(), this.scene);
+      light.diffuse = new Color3(1, 0.79, 0.43); light.range = 12; light.intensity = 0;
+      return light;
+    });
+    const lamps = [];
+    if (this.night) for (const node of this.propLightNodes || []) {
+      const candidate = { node, distance: Vector3.DistanceSquared(node.position, this.camera.position) };
+      if (!lamps[0] || candidate.distance < lamps[0].distance) { lamps[1] = lamps[0]; lamps[0] = candidate; }
+      else if (!lamps[1] || candidate.distance < lamps[1].distance) lamps[1] = candidate;
+    }
+    for (let i = 0; i < this.localLights.length; i++) {
+      const light = this.localLights[i], node = lamps[i]?.node;
+      light.intensity = node ? 2.5 : 0;
+      if (node) light.position.copyFrom(node.position.add(new Vector3(0, 3.5, 0)));
+    }
+  }
+  setTimeOfDay(hour) {
+    this.hour = hour;
+    const { elevation, daylight, lamps, night } = daylightAt(hour);
+    if (this.night !== night) this.life?.setNight(night);
     this.night = night;
-    this.life?.setNight(night);
-    for (const root of this.waterNodes || []) for (const mesh of root.getChildMeshes()) mesh.material.setFloat('daylight', night ? 0 : 1);
-    this.ambient.intensity = night ? 0.36 : 0.85; this.sun.intensity = night ? 0.25 : 1.5;
-    this.scene.clearColor = night ? new Color4(0.09, 0.16, 0.23, 1) : new Color4(0.66, 0.77, 0.78, 1);
+    for (const root of this.waterNodes || []) for (const mesh of root.getChildMeshes()) mesh.material.setFloat('daylight', daylight);
+    this.ambient.intensity = 0.32 + daylight * 0.53; this.sun.intensity = 0.15 + daylight * 1.35;
+    const angle = (hour - 6) / 24 * Math.PI * 2;
+    this.sun.direction.set(-Math.cos(angle) * 0.7, -Math.max(0.16, Math.abs(elevation)), 0.45);
+    this.sun.position.copyFrom(this.sun.direction.scale(-150));
+    const dusk = daylight * (1 - daylight) * 4;
+    this.sun.diffuse = new Color3(1, 1 - dusk * 0.3, 1 - dusk * 0.5);
+    this.scene.clearColor = new Color4(0.09 + daylight * 0.57 + dusk * 0.06, 0.16 + daylight * 0.61 - dusk * 0.06, 0.23 + daylight * 0.55 - dusk * 0.1, 1);
     this.scene.fogColor = new Color3(this.scene.clearColor.r, this.scene.clearColor.g, this.scene.clearColor.b);
-    this.material('glass', '#5c7d87').emissiveColor = night ? new Color3(0.8, 0.64, 0.3) : Color3.Black();
+    for (const key of ['glass', 'neighborhood-glass', 'utility-glass']) {
+      const mat = this.materials.get(key); if (mat) mat.emissiveColor = new Color3(0.8, 0.64, 0.3).scale(lamps);
+    }
+    for (const key of ['city-lamp', 'city-sign', 'city-light-pool', 'bridge-light']) {
+      const mat = this.materials.get(key); if (mat) mat.emissiveColor = new Color3(1, 0.78, 0.38).scale(lamps * (key === 'city-light-pool' ? 0.3 : 0.9));
+    }
+    this.updateLocalLights();
   }
   dispose() {
     this.cancelBoxSelection();

@@ -334,3 +334,23 @@
 .city-app .export-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
 .city-app .export-actions button { padding: 9px 14px; border: 1px solid #789c87; border-radius: 5px; background: #355449; color: #d6eadf; cursor: pointer; }
 .city-app .export-actions button:disabled { opacity: .5; cursor: default; }
+.lighting-panel { position: absolute; right: 72px; top: 124px; z-index: 25; width: 260px; padding: 14px; border-radius: 10px; color: #dce8df; }
+.lighting-title { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.lighting-title button { background: none; border: 0; color: inherit; font-size: 22px; cursor: pointer; }
+.lighting-panel label { display: block; font-size: 12px; margin: 10px 0; }
+.lighting-panel strong { float: right; color: #cceacb; font-variant-numeric: tabular-nums; }
+.lighting-panel input[type=range] { width: 100%; margin-top: 10px; accent-color: #a3e2bf; }
+.lighting-presets { display: flex; gap: 6px; }
+.lighting-presets button, .lighting-cycle select { background: #30473f; border: 1px solid #587166; color: #dce8df; border-radius: 5px; padding: 6px 9px; }
+.lighting-cycle { display: flex !important; justify-content: space-between; align-items: center; gap: 6px; }
+.lighting-cycle input { accent-color: #a3e2bf; }
+.lighting-panel small { display: block; font-size: 10px; color: #9bb5a7; line-height: 1.6; }
+.prop-preview { position: relative; }
+.prop-thumbnail { position: absolute; width: 65%; height: 20%; left: 18%; bottom: 25%; background: #b7c3b7; transform: skewY(-15deg); box-shadow: 0 3px #53675c; }
+.prop-sidewalk .prop-thumbnail { background: repeating-linear-gradient(90deg,#bcc6b8 0 12px,#8c9e90 12px 13px); }
+.prop-crosswalk .prop-thumbnail { background: repeating-linear-gradient(90deg,#edf0d8 0 6px,transparent 6px 11px); }
+.prop-street-lamp .prop-thumbnail { width: 4px; height: 60%; left: 50%; background: #adc3b7; transform: none; }
+.prop-street-lamp .prop-thumbnail-detail { position: absolute; top: 18%; left: 48%; width: 20%; height: 7px; background: #f0dfa0; border-radius: 3px; }
+.prop-bench .prop-thumbnail { background: repeating-linear-gradient(0deg,#b59062 0 5px,#786448 5px 6px); height: 28%; }
+.prop-bus-stop .prop-thumbnail { height: 44%; background: #86aeb2; border: 3px solid #b8c8be; border-top-width: 7px; }
+@media (max-width: 600px) { .lighting-panel { right: 58px; top: 112px; width: min(260px, calc(100vw - 80px)); max-height: calc(100dvh - 200px); overflow-y: auto; } }

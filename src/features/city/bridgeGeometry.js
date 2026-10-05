@@ -40,6 +40,10 @@ export function buildBridgeDetails(editor, road, profile, root, preview, problem
     strip('bridge-underbeam', 0.2, side * profile.width * 0.32, lift - 0.24, 0.4, steel);
     const posts = Math.max(2, Math.ceil(profile.length / 3));
     for (let i = 0; i <= posts; i++) box('bridge-rail-post', 0.11, 0.94, 0.11, at(i / posts, lateral, 0.59), steel);
+    if (!preview) {
+      const lights = Math.min(24, Math.max(2, Math.ceil(profile.length / 12)));
+      for (let i = 0; i <= lights; i++) box('bridge-light', 0.24, 0.08, 0.18, at(i / lights, lateral, 1.14), editor.material('bridge-light', '#eee1b6'));
+    }
   }
   const towers = preset.style === 'suspension' ? [0.22, 0.78] : [0.27, 0.73];
   const pierCount = Math.max(2, Math.ceil(profile.length / 18));

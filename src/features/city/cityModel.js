@@ -1,4 +1,5 @@
 import { bridgeById } from './bridgePresets.js';
+import { STREET_PROPS } from './streetProps.js';
 
 export const WORLD_SIZE = 240;
 export const RESOLUTION = 120;
@@ -62,9 +63,11 @@ export const CATEGORIES = [
   { id: 'water', name: '수도시설', icon: 'water', color: '#83c9d5' },
   { id: 'nature', name: '공원 · 자연', icon: 'tree', color: '#a7bf76' },
   { id: 'road', name: '도로', icon: 'road', color: '#b4c2cf' },
+  { id: 'streetscape', name: '보행 · 소품', icon: 'road', color: '#b9ccb2' },
   { id: 'terrain', name: '지형', icon: 'terrain', color: '#d0b58b' },
 ];
 export const ASSETS = [
+  ...STREET_PROPS,
   { id: 'house', category: 'residential', name: '가든 하우스', detail: '저밀도 주거 · 2층', width: 5, depth: 5, height: 4, color: '#e6dfcd', roof: '#a56850', people: 8 },
   { id: 'townhouses', category: 'residential', name: '연립주택', detail: '저층 주거 · 세 가구', width: 9, depth: 6, height: 5, color: '#d9cfb9', people: 24 },
   { id: 'apartment', category: 'residential', name: '테라스 아파트', detail: '중밀도 주거 · 6층', width: 7, depth: 6, height: 11, color: '#d7dfd8', people: 48 },
@@ -222,7 +225,12 @@ export function containingPlot(city, asset, x, z, rotation = 0) {
 }
 export function placementProblem(city, asset, x, z, rotation = 0, ignoreId = null) {
   const { width, depth } = footprint(asset, rotation);
-  if (!containingPlot(city, asset, x, z, rotation)) return '먼저 부지를 조성한 다음, 부지 안에 시설을 배치해 주세요.';
+  const prop = assetById[asset].category === 'streetscape';
+  if (prop) {
+    const { half } = mapDimensions(city);
+    if (Math.abs(x) + width / 2 > half || Math.abs(z) + depth / 2 > half) return '지도 안에 배치해 주세요.';
+    if (terrainHeight(city.heights, x, z) < 0.25) return '소품은 물 밖의 육지에 배치해 주세요.';
+  } else if (!containingPlot(city, asset, x, z, rotation)) return '먼저 부지를 조성한 다음, 부지 안에 시설을 배치해 주세요.';
   if (city.objects.some(o => {
     if (o.id === ignoreId) return false;
     const other = footprint(o.asset, o.rotation);
@@ -446,6 +454,11 @@ export function createCity(preset = 'river', size = WORLD_SIZE) {
   return city;
 }
 export function validateCity(value) {
+  if (value?.environment !== undefined) {
+    const env = value.environment;
+    if (!env || !Number.isFinite(env.hour) || env.hour < 0 || env.hour >= 24 || typeof env.autoCycle !== 'boolean'
+      || !Number.isFinite(env.cycleMinutes) || env.cycleMinutes < 1 || env.cycleMinutes > 60) throw new Error('시간·조명 설정이 올바르지 않습니다.');
+  }
   if (!value || value.version !== 1 || typeof value.name !== 'string' || value.name.length > 80 || !PRESETS.some(p => p.id === value.preset)) throw new Error('지원하지 않는 도시 파일입니다.');
   if (value.map !== undefined && (!value.map || !MAP_SIZES.includes(value.map.size) || value.map.resolution !== value.map.size / 2 || value.map.cellSize !== 2)) throw new Error('지도 크기 데이터가 올바르지 않습니다.');
   const { resolution, half, cameraLimit } = value.map ? mapDimensions(value) : mapDimensions();

@@ -13,6 +13,7 @@ import WaterPanel, { WaterControls } from '../features/city/WaterPanel';
 import DistrictPanel, { BatchControls } from '../features/city/DistrictPanel';
 import CameraPanel from '../features/city/CameraPanel';
 import RoadLibrary from '../features/city/RoadLibrary';
+import LightingPanel from '../features/city/LightingPanel';
 import CityExportPanel from '../features/city/CityExportPanel';
 import { saveCityFile } from '../features/city/cityFiles.js';
 import { BRIDGE_PRESETS, bridgeById } from '../features/city/bridgePresets';
@@ -26,6 +27,7 @@ function initialCity() {
   return createCity('river');
 }
 function AssetPreview({ asset }) {
+  if (asset.category === 'streetscape') return <div className={`asset-preview prop-preview prop-${asset.id}`}><span className="prop-thumbnail" /><span className="prop-thumbnail-detail" /></div>;
   const icons = { townhouses: 'townhouse', cafe: 'cafe', 'fire-station': 'fire', playground: 'playground', 'power-plant': 'power', 'solar-farm': 'solar', ess: 'battery', substation: 'substation', distribution: 'power', 'wind-turbine': 'wind', 'transmission-tower': 'tower', 'water-treatment': 'treatment', reservoir: 'tank', 'pump-station': 'pump', wastewater: 'treatment', 'intake-station': 'intake', 'water-tower': 'water-tower' };
   if (icons[asset.id]) {
     return <div className={`asset-preview utility-preview ${asset.category}`} style={{ '--asset-color': asset.color }}><span className="utility-platform" /><span className="utility-symbol"><Icon name={icons[asset.id]} size={34} /></span><span className="utility-module one" /><span className="utility-module two" /></div>;
@@ -156,7 +158,8 @@ export default function App() {
   const [exportOpen, setExportOpen] = useState(false);
   const [newMapSize, setNewMapSize] = useState(240);
   const [helpOpen, setHelpOpen] = useState(false);
-  const [night, setNight] = useState(false);
+  const [lightingOpen, setLightingOpen] = useState(false);
+  const night = (city.environment?.hour ?? 12) < 6 || (city.environment?.hour ?? 12) >= 19;
   const [trayOpen, setTrayOpen] = useState(true);
   const [search, setSearch] = useState('');
   const [notice, setNotice] = useState('');
@@ -211,7 +214,6 @@ export default function App() {
   useEffect(() => { engine.current?.setInfoVisible(infoVisible); }, [infoVisible]);
   useEffect(() => { engine.current?.setMapLayers(mapLayers); }, [mapLayers]);
   useEffect(() => { engine.current?.select(selectedIds.length > 1 ? selectedIds : selected); }, [selected, selectedIds, city]);
-  useEffect(() => { engine.current?.setNight(night); }, [night]);
   useEffect(() => { if (!notice) return; const timer = setTimeout(() => setNotice(''), 4000); return () => clearTimeout(timer); }, [notice]);
   const removeSelected = useCallback(() => {
     if (selected?.startsWith('water:')) { setNotice('물 비우기는 선택한 수역의 물 설정에서 변경하세요.'); return; }
@@ -329,7 +331,7 @@ export default function App() {
     if (['roads', 'power', 'water', 'fire'].includes(issue.id)) setInfoVisible(true);
   };
   const population = city.objects.reduce((sum, o) => sum + assetById[o.asset].people, 0);
-  const buildings = city.objects.filter(o => assetById[o.asset].category !== 'nature').length;
+  const buildings = city.objects.filter(o => !['nature', 'streetscape'].includes(assetById[o.asset].category)).length;
   const greens = city.objects.filter(o => assetById[o.asset].category === 'nature').length;
   const activeCategory = CATEGORIES.find(c => c.id === category);
   const visibleAssets = ASSETS.filter(a => a.category === category && a.name.includes(search));
@@ -352,7 +354,8 @@ export default function App() {
     <div className="world-heading"><span className="eyebrow">YOUR NEXT GREAT CITY</span><h1>부지에서 시작하는 나의 도시.</h1><p>격자 위에 부지를 놓고, 그 안에 도시를 채워 보세요.</p><div className="getting-started"><button className={category === 'plot' ? 'current' : ''} onClick={() => selectCategory('plot')}><span>01</span> 부지 조성</button><i>→</i><button className={['residential', 'commercial', 'landmark', 'power', 'water', 'nature'].includes(category) ? 'current' : ''} onClick={() => selectCategory('residential')}><span>02</span> 시설 배치</button><i>→</i><button className={category === 'road' ? 'current' : ''} onClick={() => selectCategory('road')}><span>03</span> 도로 연결</button></div></div>
     <aside className="world-summary glass"><div className="panel-label"><span className="live-dot" /> 도시 개요 <span>SANDBOX</span></div><div className="summary-primary"><Icon name="people" size={22} /><strong>{population.toLocaleString()}</strong><span>주거 수용 인원</span></div><div className="summary-grid"><div><b>{buildings}</b><span>건물</span></div><div><b>{city.roads.length}</b><span>도로 구간</span></div><div><b>{greens}</b><span>녹지 시설</span></div></div><div className="summary-utilities"><span><Icon name="power" size={13} /> 전력 <b>{service.totals.power}/{service.totals.consumers}</b></span><span><Icon name="water" size={13} /> 수도 <b>{service.totals.water}/{service.totals.consumers}</b></span><span><Icon name="fire" size={13} /> 소방 <b>{fire.totals.covered}/{fire.totals.buildings}</b></span></div><button className="summary-diagnostics" onClick={() => setDiagnosticsOpen(true)}>도시 진단 <b>{diagnostics.issues.length}</b><Icon name="info" size={13} /></button></aside>
     <nav className="scene-tools glass" aria-label="편집 도구"><button className={mode === 'select' ? 'active' : ''} aria-label="선택 도구" title="선택 도구 · Esc" onClick={() => { setMode('select'); setMovingId(null); }}><Icon name="cursor" /></button><button className={boxSelect && mode === 'select' ? 'active' : ''} aria-label="범위 선택" title="드래그로 건물·부지·도로 선택" aria-pressed={boxSelect} onClick={() => { setMode('select'); setBoxSelect(value => !value); setMovingId(null); }}><Icon name="plot" /></button><button className={mode === 'bulldoze' ? 'danger active' : ''} aria-label="철거 도구" title="클릭해서 시설 철거" onClick={() => { setMode('bulldoze'); setMovingId(null); }}><Icon name="bulldoze" /></button><span /><button aria-label="실행 취소" title="실행 취소 · Ctrl Z" disabled={!history.past.length} onClick={undo}><Icon name="undo" /></button><button aria-label="다시 실행" title="다시 실행 · Ctrl Shift Z" disabled={!history.future.length} onClick={redo}><Icon name="redo" /></button></nav>
-    <nav className="view-tools glass" aria-label="시점 조절"><button title="기본 시점" aria-label="기본 시점" onClick={() => engine.current?.view('home')}><Icon name="compass" /></button><button title="위에서 보기" aria-label="위에서 보기" onClick={() => engine.current?.view('top')}><Icon name="layers" /></button><span /><button title="확대" aria-label="확대" onClick={() => { if (engine.current) engine.current.camera.radius = Math.max(25, engine.current.camera.radius * 0.8); }}><Icon name="plus" /></button><button title="축소" aria-label="축소" onClick={() => { if (engine.current) engine.current.camera.radius = Math.min(mapDimensions(city).cameraLimit, engine.current.camera.radius * 1.2); }}><Icon name="minus" /></button><span /><button title={night ? '낮으로 변경' : '밤으로 변경'} aria-label={night ? '낮으로 변경' : '밤으로 변경'} onClick={() => setNight(v => !v)}><Icon name={night ? 'moon' : 'sun'} /></button><button aria-label="시점·이미지 저장" title="시점·이미지 저장" onClick={() => setCameraOpen(true)}><Icon name="save" /></button></nav>
+    {lightingOpen && <LightingPanel value={city.environment} engine={engine} onChange={environment => commit({ ...city, environment })} onClose={() => setLightingOpen(false)} />}
+    <nav className="view-tools glass" aria-label="시점 조절"><button title="기본 시점" aria-label="기본 시점" onClick={() => engine.current?.view('home')}><Icon name="compass" /></button><button title="위에서 보기" aria-label="위에서 보기" onClick={() => engine.current?.view('top')}><Icon name="layers" /></button><span /><button title="확대" aria-label="확대" onClick={() => { if (engine.current) engine.current.camera.radius = Math.max(25, engine.current.camera.radius * 0.8); }}><Icon name="plus" /></button><button title="축소" aria-label="축소" onClick={() => { if (engine.current) engine.current.camera.radius = Math.min(mapDimensions(city).cameraLimit, engine.current.camera.radius * 1.2); }}><Icon name="minus" /></button><span /><button title="시간 · 조명 설정" aria-label="시간 · 조명 설정" aria-expanded={lightingOpen} onClick={() => setLightingOpen(v => !v)}><Icon name={night ? 'moon' : 'sun'} /></button><button aria-label="시점·이미지 저장" title="시점·이미지 저장" onClick={() => setCameraOpen(true)}><Icon name="save" /></button></nav>
     <button className={`grid-toggle glass ${gridVisible ? 'grid-on' : ''}`} aria-pressed={gridVisible} onClick={() => setGridVisible(v => !v)} title="기본 격자 · 4 m · 배치 간격 2 m"><Icon name="plot" size={15} /> 격자 <span>{gridVisible ? 'ON' : 'OFF'}</span></button>
     <button className={`info-toggle glass ${infoVisible ? 'active' : ''}`} aria-pressed={infoVisible} onClick={() => setInfoVisible(value => !value)}><Icon name="info" size={17} /> 정보 보기 <span>{infoVisible ? 'ON' : 'OFF'}</span></button>
     <button className="map-toggle glass" aria-label="미니맵 표시" aria-pressed={minimapOpen} onClick={() => setMinimapOpen(value => !value)}><Icon name="compass" size={16} /> 지도</button>
