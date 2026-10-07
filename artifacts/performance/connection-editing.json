@@ -1,0 +1,24 @@
+{
+  "measuredAt": "2026-10-07T13:14:48.520Z",
+  "type": "CPU and resource counts in Babylon NullEngine; not GPU FPS",
+  "reports": [
+    {
+      "connections": 208,
+      "visibleConnections": 192,
+      "batches": 6,
+      "materials": 1,
+      "buildMS": 185.7328,
+      "styleEditMS": 55.53009999999995,
+      "reusedGeometry": 192
+    },
+    {
+      "connections": 2000,
+      "visibleConnections": 1856,
+      "batches": 58,
+      "materials": 1,
+      "buildMS": 740.704,
+      "styleEditMS": 252.80790000000002,
+      "reusedGeometry": 1856
+    }
+  ]
+}

@@ -1,3 +1,4 @@
+import { libraryCategory } from '../presets/libraryGroups.js';
 import { useState } from 'react';
 import { assetById, CATEGORIES } from '../presets/catalog.js';
 import Icon from '../editor/components/CityIcon.jsx';
@@ -7,13 +8,13 @@ import { facilityName, facilityStatus } from './facilityProperties.js';
 export function FacilityDirectory({ city, onClose, onSelect }) {
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('all');
-  const objects = city.objects.filter(object => (category === 'all' || assetById[object.asset].category === category) && [facilityName(object), assetById[object.asset].name, object.properties?.code || ''].some(text => text.toLowerCase().includes(query.trim().toLowerCase())));
+  const objects = city.objects.filter(object => (category === 'all' || libraryCategory(assetById[object.asset]) === category) && [facilityName(object), assetById[object.asset].name, object.properties?.code || ''].some(text => text.toLowerCase().includes(query.trim().toLowerCase())));
   return <div className="modal-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}><section className="facility-directory glass" role="dialog" aria-modal="true" aria-labelledby="facility-directory-title">
     <button className="modal-close" aria-label="시설 목록 닫기" onClick={onClose}><Icon name="close" /></button>
     <h2 id="facility-directory-title">도시 시설 목록</h2><p>시설을 선택하면 해당 위치로 이동합니다.</p>
     <div className="directory-filters"><input autoFocus type="search" aria-label="배치된 시설 검색" placeholder="시설 이름 · 설비 번호 검색" value={query} onChange={event => setQuery(event.target.value)} /><select aria-label="시설 카테고리 필터" value={category} onChange={event => setCategory(event.target.value)}><option value="all">전체 카테고리</option>{CATEGORIES.filter(item => !['plot', 'road', 'terrain'].includes(item.id)).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></div>
     <small>{objects.length}개 표시 · 전체 {city.objects.length}개</small>
-    <ul>{objects.map(object => <li key={object.id}><button onClick={() => onSelect(object.id, 'object')}><Icon name={CATEGORIES.find(item => item.id === assetById[object.asset].category).icon} size={19} /><span><strong>{facilityName(object)}</strong><small>{object.properties?.code && `${object.properties.code} · `}{facilityStatus(object).name} · {CATEGORIES.find(item => item.id === assetById[object.asset].category).name} · {object.x.toFixed(1)}, {object.z.toFixed(1)} m</small></span><Icon name="compass" size={16} /></button></li>)}</ul>{!objects.length && <p>조건에 맞는 배치된 시설이 없습니다.</p>}
+    <ul>{objects.map(object => <li key={object.id}><button onClick={() => onSelect(object.id, 'object')}><Icon name={CATEGORIES.find(item => item.id === libraryCategory(assetById[object.asset])).icon} size={19} /><span><strong>{facilityName(object)}</strong><small>{object.properties?.code && `${object.properties.code} · `}{facilityStatus(object).name} · {CATEGORIES.find(item => item.id === libraryCategory(assetById[object.asset])).name} · {object.x.toFixed(1)}, {object.z.toFixed(1)} m</small></span><Icon name="compass" size={16} /></button></li>)}</ul>{!objects.length && <p>조건에 맞는 배치된 시설이 없습니다.</p>}
   </section></div>;
 }
 

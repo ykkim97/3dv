@@ -3,6 +3,8 @@ import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder.js';
 import { Mesh } from '@babylonjs/core/Meshes/mesh.js';
 import { Color3 } from '@babylonjs/core/Maths/math.color.js';
 import { roadProfile } from '../roads/roadGeometry.js';
+import { AmbientLife } from './AmbientLife.js';
+import { DEFAULT_LIFE_SETTINGS } from './lifeSettings.js';
 
 export function roadTravel(profile, distance, direction = 1) {
   distance = Math.max(0, Math.min(profile.length, distance));
@@ -17,7 +19,8 @@ export class CityLife {
   update(city) {
     this.root?.dispose(); this.root = new TransformNode('city-life', this.editor.scene); this.actors = []; this.lamps = [];
     this.actorsEnabled = undefined;
-    this.settings = { enabled: true, cars: true, people: true, ...city.lifeSettings };
+    this.settings = { ...DEFAULT_LIFE_SETTINGS, ...city.lifeSettings };
+    this.ambient = new AmbientLife(this.editor, this.root, city, this.settings);
     const roads = city.roads.filter(road => Math.hypot(road.b.x - road.a.x, road.b.z - road.a.z) >= 2);
     this.routes = new Map(roads.map(road => [road.id, roadProfile(city, road, this.editor.roadConnections || [])]));
     this.roads = roads;
@@ -84,10 +87,12 @@ export class CityLife {
     this.setNight(this.editor.night); this.tick(0);
   }
   setNight(night) {
+    this.ambient?.setNight(night);
     for (const color of ['#ffe5a0', '#fff2c1']) this.editor.material(`life-${color}`, color).emissiveColor = night ? Color3.FromHexString(color).scale(0.85) : Color3.Black();
   }
   tick(delta) {
     if (!this.root) return;
+    this.ambient?.tick(delta);
     this.elapsed += delta;
     if (this.actorsEnabled !== this.settings.enabled) {
       for (const actor of this.actors) actor.root.setEnabled(this.settings.enabled);

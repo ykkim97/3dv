@@ -22,6 +22,7 @@ import { terrainHeight } from '../terrain/terrainModel.js';
 import { createPlotTextures } from '../plots/plotMaterials.js';
 import { roadJunctions } from '../roads/roadGeometry.js';
 import { CityLife } from '../simulation/CityLife.js';
+import { AmbientLife } from '../simulation/AmbientLife.js';
 import { DEFAULT_ENVIRONMENT } from '../lighting/dayLighting.js';
 
 import { assetBuilders } from './builders/assetBuilders.js';
@@ -37,6 +38,11 @@ import { selection } from '../interaction/selection.js';
 import { cameraControls } from '../editor/camera/cameraControls.js';
 import { lightingSystem } from '../lighting/LightingSystem.js';
 import { connectionRendering } from '../connections/connectionRendering.js';
+import { serviceBadges } from './systems/serviceBadges.js';
+import { performanceControls } from './performance/performanceControls.js';
+import { DEFAULT_QUALITY } from './performance/renderQuality.js';
+import { nextFrameTime } from './performance/frameTiming.js';
+import { waypointInteraction } from '../connections/waypointInteraction.js';
 
 export class CityEngine {
   constructor(canvas, onChange, onSelect, onMessage, onBrushMove, onRenderError) {
@@ -52,6 +58,8 @@ export class CityEngine {
     this.scene.clearColor = new Color4(0.66, 0.77, 0.78, 1);
     this.scene.fogMode = Scene.FOGMODE_EXP2;
     this.scene.fogDensity = 0.0018;
+    this.scene.doNotHandleCursors = true;
+    this.scene.skipPointerMovePicking = true;
     this.scene.fogColor = new Color3(0.66, 0.77, 0.78);
     this.camera = new ArcRotateCamera('city-camera', -Math.PI / 2.8, 0.83, 205, new Vector3(-13, 0, 4), this.scene);
     this.camera.lowerRadiusLimit = 25;
@@ -93,15 +101,27 @@ export class CityEngine {
     this.brushSpokes.isPickable = false;
     this.brushSpokes.setEnabled(false);
     this.options = { mode: 'select', radius: 12, strength: 0.5, rotation: 0 };
-    this.gridVisible = true;
+    this.gridVisible = false;
     this.down = false;
     this.bindEvents();
     this.resize = new ResizeObserver(() => this.engine.resize());
     this.resize.observe(canvas);
     this.engine.resize();
+    this.renderQuality = { ...DEFAULT_QUALITY };
     this.engine.runRenderLoop(() => {
-      if (this.renderPaused) return;
-      try { this.tickDaylight(this.engine.getDeltaTime() / 1000); this.tickConnections(this.engine.getDeltaTime() / 1000); this.life?.tick(Math.min(0.06, this.engine.getDeltaTime() / 1000)); this.scene.render(); }
+      if (this.renderPaused || document.hidden) { this.lastRenderAt = null; this.nextRenderAt = null; this.frameMeter = null; return; }
+      const now = performance.now(), interval = 1000 / this.renderQuality.fpsLimit;
+      if (this.nextRenderAt != null && now < this.nextRenderAt - 0.5) return;
+      const delta = this.lastRenderAt == null ? interval / 1000 : Math.min(0.1, (now - this.lastRenderAt) / 1000);
+      // Preserve the schedule remainder on 120/144 Hz displays instead of
+      // rounding every frame interval up to a whole number of refreshes.
+      this.nextRenderAt = nextFrameTime(now, this.nextRenderAt, interval);
+      this.lastRenderAt = now;
+      try {
+        this.tickDaylight(delta);
+        if (this.renderQuality.motion) { this.tickConnections(delta); this.life?.tick(Math.min(0.06, delta)); }
+        this.scene.render(); this.recordFrame(now, performance.now() - now);
+      }
       catch (error) {
         if (!this.renderErrorReported) { this.renderErrorReported = true; this.onRenderError?.(`3D 장면 렌더링 오류: ${error.message}`); }
       }
@@ -152,7 +172,7 @@ export class CityEngine {
   invalidateShadows() {
     this.shadows?.getShadowMap?.()?.resetRefreshCounter();
   }
-  setCity(city) {
+  setCity(city, service) {
     this.cancelRoadEdit();
     this.clearSelectionFrames();
     const previous = this.renderedCity;
@@ -183,6 +203,7 @@ export class CityEngine {
       }
     }
     this.city = structuredClone(city);
+    this.utilityCity = service ? this.city : null; this.utilityService = service || null;
     if (!previous || JSON.stringify(previous.environment) !== JSON.stringify(city.environment)) {
       this.environment = { ...DEFAULT_ENVIRONMENT, ...city.environment }; this.hour = this.environment.hour;
     }
@@ -211,15 +232,24 @@ export class CityEngine {
     if (this.engine) {
       if (!this.life) this.life = new CityLife(this);
       if (terrainChanged || roadsChanged || !previous || JSON.stringify(previous.lifeSettings) !== JSON.stringify(city.lifeSettings)) this.life.update(this.city);
+      else if (JSON.stringify(previous.objects.map(renderRecord)) !== JSON.stringify(city.objects.map(renderRecord)) || JSON.stringify(previous.plots) !== JSON.stringify(city.plots)) {
+        // Moving facilities/gardens must move their effects without resetting road traffic.
+        this.life.ambient.root.dispose();
+        this.life.ambient = new AmbientLife(this, this.life.root, this.city, this.life.settings);
+      }
     }
     this.updateDistricts();
     this.updateConnections(terrainChanged);
     this.refreshInfoOverlay();
     this.updateServiceGuides();
+    this.updateServiceBadges();
     if (terrainChanged || roadsChanged || [...nextRecords].some(([id, record]) => oldRecords.get(id) !== record) || oldRecords.size !== nextRecords.size) this.invalidateShadows();
     if (this.sun && this.ambient) this.setTimeOfDay(this.hour ?? 12);
   }
   dispose() {
+    this.finishWaypointPointer(null, true);
+    this.setPerformanceMonitoring(false);
+    this.clearServiceBadges();
     this.cancelBoxSelection();
     this.resize.disconnect();
     for (const [name, handler] of Object.entries(this.handlers)) this.canvas.removeEventListener(name, handler);
@@ -227,4 +257,4 @@ export class CityEngine {
   }
 }
 
-Object.assign(CityEngine.prototype, assetBuilders, plotBuilder, roadBuilder, terrainRendering, cityOverlays, waterRendering, placementPreview, placementCommands, pointerControls, selection, cameraControls, lightingSystem, connectionRendering);
+Object.assign(CityEngine.prototype, assetBuilders, plotBuilder, roadBuilder, terrainRendering, cityOverlays, waterRendering, placementPreview, placementCommands, pointerControls, selection, cameraControls, lightingSystem, connectionRendering, serviceBadges, performanceControls, waypointInteraction);

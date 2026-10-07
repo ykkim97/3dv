@@ -23,13 +23,15 @@ import { bridgeById } from '../presets/bridgePresets.js';
 
 export const pointerControls = {
   setOptions(options) {
+    if (this.options.mode !== options.mode) this.finishWaypointPointer?.(null, true);
     const changed = this.options.mode !== options.mode || this.options.asset !== options.asset || this.options.road !== options.road || this.options.bridge !== options.bridge || this.options.roadShape !== options.roadShape || this.options.plot !== options.plot || this.options.rotation !== options.rotation || this.options.surface !== options.surface || this.options.align !== options.align || this.options.gap !== options.gap || this.options.movingId !== options.movingId;
     const plotChanged = this.options.mode !== options.mode || this.options.plot !== options.plot;
     this.options = options;
     if (options.mode !== 'select') this.cancelPlotEdit();
     if (options.mode !== 'select') this.cancelRoadEdit();
     if (changed) { this.clearPreview(); this.roadStart = null; this.roadEnd = null; this.pendingRoadStart = null; if (plotChanged) { this.plotStart = null; this.plotDraft = null; this.plotMoved = false; } }
-    this.canvas.style.cursor = options.mode === 'select' && !options.boxSelect ? 'default' : 'crosshair';
+    if (changed) { this.ring?.setEnabled(false); this.brushSpokes?.setEnabled(false); this.onBrushMove?.(null); }
+    this.canvas.style.cursor = options.mode === 'select' && !options.boxSelect ? 'var(--scene-pointer, default)' : 'var(--build-pointer, crosshair)';
     if (changed && this.lastPointer) this.move(this.lastPointer);
   },
   pick(event, terrainOnly = true) {
@@ -40,8 +42,11 @@ export const pointerControls = {
     if (this.boxSelection) { this.updateBoxSelection(event); return; }
     this.lastPointer = { clientX: event.clientX, clientY: event.clientY };
     if (!this.city) return;
+    if (this.waypointDrag) { this.updateWaypointPointer(event); return; }
     if (this.roadEdit) { const terrain = this.pick(event); if (terrain.hit) this.updateRoadEdit(terrain.pickedPoint, event); return; }
     if (this.plotEdit) { const terrain = this.pick(event); if (terrain.hit) this.updatePlotEdit(terrain.pickedPoint, event); return; }
+    // Selection/connection tools only need a hit test when clicked.
+    if (!['terrain', 'build', 'plot', 'move', 'road'].includes(this.options.mode)) return;
     const hit = this.pick(event);
     if (!hit.hit) { this.roadSnapMarker?.setEnabled(false); this.roadPreview?.setEnabled(false); this.plotAnchor?.setEnabled(false); this.alignmentGuide?.setEnabled(false); this.ring.setEnabled(false); this.brushSpokes.setEnabled(false); this.preview?.setEnabled(false); this.targetCell?.setEnabled(false); this.targetBorder?.setEnabled(false); this.onBrushMove?.(null); return; }
     const p = hit.pickedPoint;
@@ -144,6 +149,11 @@ export const pointerControls = {
       pointerdown: e => {
         if (e.button !== 0 || !this.city) return;
         const { mode } = this.options;
+        if ((mode === 'select' || mode === 'waypoint') && !e.shiftKey && !this.options.boxSelect && this.beginWaypointPointer?.(e)) return;
+        if (mode === 'waypoint') {
+          this.onMessage('편집할 연결선을 먼저 선택하세요.');
+          return;
+        }
         if (mode === 'connect') {
           const rect = this.canvas.getBoundingClientRect();
           const hit = this.scene.pick(e.clientX - rect.left, e.clientY - rect.top, mesh => !!mesh.metadata?.objectId);
@@ -208,9 +218,9 @@ export const pointerControls = {
           else this.placeRoad(end);
         }
       },
-      pointerup: e => { if (this.boxSelection) this.finishBoxSelection(e); else if (this.roadEdit) this.finishRoadEdit(e); else if (this.plotEdit) this.finishPlotEdit(e); else this.endStroke(e); },
-      pointercancel: e => { this.cancelBoxSelection(); this.cancelRoadEdit(); this.cancelPlotEdit(); this.endStroke(e); },
-      lostpointercapture: e => { this.cancelBoxSelection(); this.cancelRoadEdit(); this.cancelPlotEdit(); this.endStroke(e); },
+      pointerup: e => { if (this.waypointDrag) this.finishWaypointPointer(e); else if (this.boxSelection) this.finishBoxSelection(e); else if (this.roadEdit) this.finishRoadEdit(e); else if (this.plotEdit) this.finishPlotEdit(e); else this.endStroke(e); },
+      pointercancel: e => { this.finishWaypointPointer?.(e, true); this.cancelBoxSelection(); this.cancelRoadEdit(); this.cancelPlotEdit(); this.endStroke(e); },
+      lostpointercapture: e => { this.finishWaypointPointer?.(e, true); this.cancelBoxSelection(); this.cancelRoadEdit(); this.cancelPlotEdit(); this.endStroke(e); },
     };
     for (const [name, handler] of Object.entries(this.handlers)) this.canvas.addEventListener(name, handler);
   },

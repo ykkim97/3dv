@@ -24,6 +24,14 @@ export const plotBuilder = {
     const finish = plotSurface(plot.surface);
     const natural = finish.id === 'grass' || finish.id === 'soil';
     const base = this.box('plot-base', plot.width, PLOT_ELEVATION - 0.015, plot.depth, plot.x, y - PLOT_ELEVATION / 2 - 0.0075, plot.z, this.material(natural ? 'plot-earth-base' : 'plot-stone-base', natural ? '#514431' : '#575c58'), root);
+    // The textured ground is the only top face. A second nearly coplanar
+    // box cap competes for depth at distant or grazing camera angles.
+    const normals = base.getVerticesData(VertexBuffer.NormalKind), indices = base.getIndices(), sides = [];
+    for (let i = 0; i < indices.length; i += 3) {
+      if ([indices[i], indices[i + 1], indices[i + 2]].every(vertex => normals[vertex * 3 + 1] > 0.9)) continue;
+      sides.push(indices[i], indices[i + 1], indices[i + 2]);
+    }
+    base.setIndices(sides);
     base.metadata = { plotId: plot.id };
     const surface = MeshBuilder.CreateGround('plot', { width: plot.width, height: plot.depth }, this.scene);
     surface.position.set(plot.x, y, plot.z); surface.parent = root;

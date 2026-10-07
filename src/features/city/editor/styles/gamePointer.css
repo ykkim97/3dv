@@ -1,0 +1,6 @@
+.city-app { --scene-pointer: url('/cursors/scene-arrow.svg') 4 3, default; --action-pointer: url('/cursors/scene-action.svg') 4 3, pointer; --build-pointer: url('/cursors/scene-target.svg') 16 16, crosshair; cursor: var(--scene-pointer); }
+.city-app .city-canvas { cursor: var(--scene-pointer); }
+.city-app[data-tool=build] .city-canvas, .city-app[data-tool=plot] .city-canvas, .city-app[data-tool=road] .city-canvas, .city-app[data-tool=terrain] .city-canvas, .city-app[data-tool=connect] .city-canvas, .city-app[data-tool=move] .city-canvas { cursor: var(--build-pointer); }
+.city-app button:not(:disabled), .city-app a, .city-app summary, .city-app select, .city-app input[type=checkbox], .city-app input[type=range], .city-app .asset-card { cursor: var(--action-pointer) !important; }
+.city-app button:disabled { cursor: not-allowed; }
+.city-app input:not([type=checkbox]):not([type=range]):not([type=color]), .city-app textarea { cursor: text; }

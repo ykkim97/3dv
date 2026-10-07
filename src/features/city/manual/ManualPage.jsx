@@ -5,6 +5,7 @@ import { BRIDGE_PRESETS } from '../presets/bridgePresets.js';
 import { FLOW_EFFECTS } from '../connections/connectionModel.js';
 import { ASSET_USAGE, MANUAL_SECTIONS, SHORTCUTS, TUTORIALS } from './manualContent.js';
 import './manual.css';
+import { libraryCategory, librarySubcategory } from '../presets/libraryGroups.js';
 
 const chapters = [
   ...MANUAL_SECTIONS.map(({ id, title }) => ({ id, title })),
@@ -13,7 +14,8 @@ const chapters = [
 ];
 const categoryUsage = {
   residential: '주거 구역을 구성합니다. 부지 안에 배치하고 도로 접근과 전력·수도 공급을 확인하세요. 표시 인원은 주거 수용 인원입니다.',
-  commercial: '상점·업무용 빌딩·공장을 배치해 상업과 산업 구역을 구성합니다. 주거지와 도로로 이어 배치하고 공급 상태를 확인하세요.',
+  commercial: '상점·업무용 빌딩·호텔로 상업 구역을 구성합니다. 주거지와 도로로 이어 배치하고 공급 상태를 확인하세요.',
+  industrial: '공장과 창고로 생산·물류 구역을 구성합니다. 넓은 부지와 도로를 확보하고 전력·수도 공급을 확인하세요.',
   landmark: '도시의 공공시설로 사용합니다. 주거 구역 주변에 배치하고 도로·공급 상태를 확인하세요.',
   nature: '공원과 녹지를 꾸밉니다. 부지의 여유 공간에 배치해 도시 경관을 구성하세요.',
 };
@@ -25,8 +27,8 @@ export default function ManualPage({ onClose }) {
   const search = query.trim().toLocaleLowerCase();
   const matches = (...values) => !search || values.join(' ').toLocaleLowerCase().includes(search);
   const sections = MANUAL_SECTIONS.map(section => ({ ...section, blocks: section.blocks.filter(block => matches(section.title, ...block)) })).filter(section => section.blocks.length);
-  const assets = useMemo(() => ASSETS.map(asset => ({ ...asset, usage: ASSET_USAGE[asset.id] || categoryUsage[asset.category] || asset.detail })), []);
-  const groups = CATEGORIES.map(category => ({ ...category, assets: assets.filter(asset => asset.category === category.id && matches(category.name, asset.name, asset.id, asset.detail, asset.usage)) })).filter(category => category.assets.length);
+  const assets = useMemo(() => ASSETS.map(asset => ({ ...asset, usage: ASSET_USAGE[asset.id] || categoryUsage[libraryCategory(asset)] || asset.detail })), []);
+  const groups = CATEGORIES.map(category => ({ ...category, assets: assets.filter(asset => libraryCategory(asset) === category.id && matches(category.name, librarySubcategory(asset), asset.name, asset.id, asset.detail, asset.usage)) })).filter(category => category.assets.length);
   const worlds = PRESETS.filter(preset => matches('도시 지도 프리셋', preset.name, preset.subtitle, preset.id));
   const plots = PLOT_TYPES.filter(preset => matches('부지 프리셋', preset.name, preset.detail));
   const roads = ROAD_TYPES.filter(preset => matches('도로 프리셋', preset.name, preset.detail));

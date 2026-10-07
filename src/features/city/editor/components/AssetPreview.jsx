@@ -1,10 +1,12 @@
-import Icon from './CityIcon.jsx';
+import { memo } from 'react';
+import { lowPolyPreview } from '../../presets/lowPolyPreview.js';
+import './assetPreview.css';
 
-export default function AssetPreview({ asset }) {
-  if (asset.category === 'streetscape') return <div className={`asset-preview prop-preview prop-${asset.id}`}><span className="prop-thumbnail" /><span className="prop-thumbnail-detail" /></div>;
-  const icons = { townhouses: 'townhouse', cafe: 'cafe', 'fire-station': 'fire', playground: 'playground', 'power-plant': 'power', 'nuclear-plant': 'nuclear', 'smart-factory': 'factory', 'solar-farm': 'solar', ess: 'battery', substation: 'substation', distribution: 'power', 'wind-turbine': 'wind', 'transmission-tower': 'tower', 'water-treatment': 'treatment', reservoir: 'tank', 'pump-station': 'pump', wastewater: 'treatment', 'intake-station': 'intake', 'water-tower': 'water-tower' };
-  if (icons[asset.id]) {
-    return <div className={`asset-preview utility-preview ${asset.category}`} style={{ '--asset-color': asset.color }}><span className="utility-platform" /><span className="utility-symbol"><Icon name={icons[asset.id]} size={34} /></span><span className="utility-module one" /><span className="utility-module two" /></div>;
-  }
-  return <div className="asset-preview" style={{ '--asset-color': asset.color, '--building-height': `${Math.min(61, 22 + asset.height * 1.3)}px` }}><span className="model-ground" />{asset.category === 'nature' ? <><span className="model-tree one" /><span className="model-tree two" /><span className="model-tree three" /></> : <><span className={`model-building ${asset.id === 'house' ? 'model-house' : ''}`} /><span className="model-small-tree" /></>}</div>;
-}
+export default memo(function AssetPreview({ asset, kind = 'asset' }) {
+  return <svg className="asset-preview low-poly-preview" viewBox="0 0 160 104" aria-hidden="true" focusable="false">
+    <ellipse cx="80" cy="88" rx="56" ry="11" fill="#07151d" opacity=".22" />
+    {lowPolyPreview(asset, kind).map((part, index) => part.text
+      ? <text key={index} x={part.x} y={part.y} fill={part.fill} fontSize="12" fontWeight="800" textAnchor="middle">{part.text}</text>
+      : <polygon key={index} points={part.points} fill={part.fill} stroke={part.fill} strokeWidth=".45" strokeLinejoin="round" />)}
+  </svg>;
+});

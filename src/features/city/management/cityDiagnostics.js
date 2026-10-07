@@ -4,6 +4,9 @@ import { plotHasRoadAccess } from '../plots/plotModel.js';
 // Simple planning assumptions. These are coverage and capacity guides, not a traffic or demographic simulation.
 export const CITY_ROLE_SPECS = {
   shop: { jobs: 12 }, cafe: { jobs: 10 }, office: { jobs: 100 }, hotel: { jobs: 45 },
+  'smart-factory': { jobs: 60 }, 'logistics-center': { jobs: 40 }, warehouse: { jobs: 12 }, 'cold-storage': { jobs: 18 },
+  'small-factory': { jobs: 25 }, 'assembly-plant': { jobs: 65 }, 'bus-depot': { jobs: 20 },
+  'recycling-center': { jobs: 20 }, 'resource-recovery': { jobs: 35 },
   school: { radius: 55, capacity: 120 },
   hospital: { radius: 70, capacity: 300 },
   park: { radius: 45 }, playground: { radius: 35 },
@@ -38,24 +41,31 @@ export function analyzeCity(city, utility, fire) {
     { id: 'residential', label: '주거시설', value: population.toLocaleString(), detail: `주거 ${homes.length}개 · 수용 인원`, warning: homes.length === 0 },
     { id: 'commercial', label: '상업 · 산업', value: jobs.toLocaleString(), detail: `예상 일자리 · 계획 수요 ${workforce}`, warning: population > 0 && jobs < workforce },
     { id: 'landmark', label: '공공시설', value: `${fire.totals.covered}/${fire.totals.buildings}`, detail: `소방 도달 · 학교 ${access.school.reached}/${population}명 · 의료 ${access.hospital.reached}/${population}명`, warning: population > 0 && (fire.totals.covered < fire.totals.buildings || access.school.reached < population || access.hospital.reached < population || access.school.capacity < schoolDemand) },
-    { id: 'power', label: '전력 시설', value: `${utility.totals.power}/${utility.totals.consumers}`, detail: '예상 공급 건물', warning: utility.totals.power < utility.totals.consumers },
-    { id: 'water', label: '상하수도 시설', value: `${utility.totals.water}/${utility.totals.consumers}`, detail: '예상 공급 건물', warning: utility.totals.water < utility.totals.consumers },
+    { id: 'power', label: '전력 시설', value: `${utility.totals.power}/${utility.totals.consumers}`, detail: utility.powerMode === 'network' ? '연결망 공급 건물' : '예상 공급 건물', warning: utility.totals.power < utility.totals.consumers },
+    { id: 'water', label: '수도 공급', value: `${utility.totals.water}/${utility.totals.consumers}`, detail: utility.waterMode === 'network' ? '연결된 소비시설' : '예상 공급 건물', warning: utility.totals.water < utility.totals.consumers },
     { id: 'nature', label: '공원 · 조경', value: `${access.park.reached}/${population}`, detail: '녹지 접근 주민', warning: population > 0 && access.park.reached < population },
     { id: 'terrain', label: '지형', value: `${terrainRelief.toFixed(1)} m`, detail: '최고·최저 고도차 · 지형 편집 가능', warning: false },
   ];
   const issues = [];
   const add = (id, title, detail, category, asset, targetId, kind) => issues.push({ id, title, detail, category, asset, targetId, kind });
+  if (utility.powerBalance) {
+    const shortages = [...utility.powerBalance.results].filter(([, result]) => result.status === 'shortage');
+    if (shortages.length) add('power-shortage', `전력 부족 건물 ${shortages.length}개`, '발전 출력과 중계 용량을 확인하거나 공급 경로를 추가하세요.', 'power', 'power-plant', shortages[0][0], 'object');
+    if (utility.powerBalance.missing.size) add('power-unset', `전력 수치 미설정 시설 ${utility.powerBalance.missing.size}개`, '발전 출력·소비 수요·중계 용량을 입력하세요.', 'power', null, utility.powerBalance.missing.keys().next().value, 'object');
+  }
   if (!city.plots.length) add('plots', '건설 부지를 조성하세요', '시설을 배치할 공간이 필요합니다.', 'plot');
   if (disconnectedPlots.length) add('roads', `도로와 떨어진 부지 ${disconnectedPlots.length}개`, '부지 옆으로 차량 도로를 연결하세요.', 'road', null, disconnectedPlots[0].id, 'plot');
   if (city.plots.length && !homes.length) add('homes', '주거 시설을 배치하세요', '인구가 있어야 도시 서비스 수요를 확인할 수 있습니다.', 'residential', 'house');
   if (population && jobs < workforce) add('jobs', `예상 일자리 ${Math.max(0, workforce - jobs)}개 부족`, '상업 시설을 배치해 주거와 일자리의 균형을 맞추세요.', 'commercial', 'shop');
-  if (utility.totals.consumers && utility.totals.power < utility.totals.consumers) add('power', `전력 공급 밖 건물 ${utility.totals.consumers - utility.totals.power}개`, '발전 시설을 놓거나 공급 거점을 가까이 배치하세요.', 'power', 'power-plant', [...utility.consumers].find(([, coverage]) => !coverage.power)?.[0], 'object');
-  if (utility.totals.consumers && utility.totals.water < utility.totals.consumers) add('water', `수도 공급 밖 건물 ${utility.totals.consumers - utility.totals.water}개`, '정수장을 놓거나 급수 거점을 가까이 배치하세요.', 'water', 'water-treatment', [...utility.consumers].find(([, coverage]) => !coverage.water)?.[0], 'object');
+  if (utility.totals.consumers && utility.totals.power < utility.totals.consumers) add('power', `전력 미공급 건물 ${utility.totals.consumers - utility.totals.power}개`, utility.powerMode === 'network' ? '전력선의 종류·방향과 발전·중계 시설의 운전 상태를 확인하세요.' : '발전 시설을 놓거나 공급 거점을 가까이 배치하세요.', 'power', 'power-plant', [...utility.consumers].find(([, coverage]) => !coverage.power)?.[0], 'object');
+  if (utility.totals.consumers && utility.totals.water < utility.totals.consumers) add('water', `수도 미공급 건물 ${utility.totals.consumers - utility.totals.water}개`, utility.waterMode === 'network' ? '정수장에서 이어지는 수도선 방향·사용 여부와 시설 운전 상태를 확인하세요.' : '정수장을 놓거나 급수 거점을 가까이 배치하세요.', 'water', 'water-treatment', [...utility.consumers].find(([, coverage]) => !coverage.water)?.[0], 'object');
   if (fire.totals.buildings && fire.totals.covered < fire.totals.buildings) add('fire', `소방 도달 밖 건물 ${fire.totals.buildings - fire.totals.covered}개`, '소방서를 차량 도로에 연결하고 서비스 범위를 확인하세요.', 'landmark', 'fire-station', [...fire.buildings].find(([, coverage]) => !coverage.stationId)?.[0], 'object');
   if (population && access.school.reached < population) add('school', `학교 접근 밖 주민 ${population - access.school.reached}명`, '주거지 가까이에 학교를 배치하세요.', 'landmark', 'school', outside.school, 'object');
   if (population && access.school.count && access.school.capacity < schoolDemand) add('school-capacity', `예상 학교 정원 ${schoolDemand - access.school.capacity}명 부족`, '학교를 추가해 계획 정원을 확보하세요.', 'landmark', 'school');
   if (population && access.hospital.reached < population) add('hospital', `의료 접근 밖 주민 ${population - access.hospital.reached}명`, '주거지 가까이에 의료시설을 배치하세요.', 'landmark', 'hospital', outside.hospital, 'object');
   if (population && access.hospital.count && access.hospital.capacity < population) add('hospital-capacity', `예상 진료권 ${population - access.hospital.capacity}명 부족`, '의료시설을 추가해 계획 수용량을 확보하세요.', 'landmark', 'hospital');
   if (population && access.park.reached < population) add('park', `녹지 접근 밖 주민 ${population - access.park.reached}명`, '주거지 가까이에 공원이나 놀이터를 배치하세요.', 'nature', 'park', outside.park, 'object');
+  const disconnectedChargers = [...utility.facilities.values()].filter(facility => facility.role === 'consumer' && !facility.connected);
+  if (disconnectedChargers.length) add('charging-power', `전력 미연결 충전시설 ${disconnectedChargers.length}개`, '발전소나 배전 설비에서 충전기로 향하는 전력선을 연결하세요. 충전기를 선택하면 수요와 공급 상태를 확인할 수 있습니다.', 'power', 'fast-charger', disconnectedChargers[0].id, 'object');
   return { population, jobs, workforce, schoolDemand, disconnectedPlots, access, facilities, sections, issues };
 }

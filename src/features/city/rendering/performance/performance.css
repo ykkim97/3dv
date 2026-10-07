@@ -1,0 +1,8 @@
+.performance-panel { position: relative; width: min(540px, calc(100vw - 32px)); padding: 26px; border-radius: 16px; color: #e1eee5; max-height: 85dvh; overflow: auto; }
+.performance-panel h2 { font-size: 20px; margin: 0 0 14px; }
+.performance-panel p { color: #b6cdc2; font-size: 12px; line-height: 1.7; }
+.performance-panel label { display: flex; align-items: center; justify-content: space-between; margin: 15px 0; gap: 12px; }
+.performance-panel button, .performance-panel select { color: #e1eee5; background: #30473f; border: 1px solid #587166; border-radius: 6px; padding: 8px 12px; }
+.performance-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.performance-metrics > div { background: #ffffff08; border: 1px solid #ffffff15; padding: 12px; border-radius: 8px; }
+.performance-metrics dt { font-size: 11px; color: #b6cdc2; }.performance-metrics dd { font-size: 20px; margin: 5px 0 0; font-variant-numeric: tabular-nums; }

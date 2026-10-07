@@ -1,5 +1,6 @@
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder.js';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector.js';
+import { facadeWindow } from './facadeWindows.js';
 
 // Shared materials and low tessellation keep these demonstration presets inexpensive.
 export function buildEnergyDemoAsset(editor, asset, root) {
@@ -27,7 +28,7 @@ export function buildEnergyDemoAsset(editor, asset, root) {
     }
     box('nuclear-turbine-hall', 5, 5, 16, 10, 2.7, -2, concrete);
     box('nuclear-turbine-roof', 5.2, .25, 16.2, 10, 5.3, -2, dark);
-    for (const z of [-8, -4, 0, 4]) box('turbine-glazing', .1, 1.3, 2, 12.55, 3.6, z, blue);
+    for (const z of [-8, -4, 0, 4]) facadeWindow(editor, 'turbine-glazing', 2, 1.3, 12.5, 3.6, z, 'right', blue, root);
   } else {
     box('factory-production-hall', 15, 5.6, 12, -1.5, 3, 1, editor.material('factory-wall', asset.color));
     box('factory-roof', 15.4, .3, 12.4, -1.5, 5.95, 1, dark);
@@ -37,7 +38,7 @@ export function buildEnergyDemoAsset(editor, asset, root) {
       box('factory-bay-header', 3.2, .25, .2, x, 3.5, -5.15, blue);
     }
     for (const x of [-6, -2, 2]) for (const z of [-2, 2, 5]) box('factory-rooftop-solar', 3.2, .12, 2.2, x, 6.18, z, blue).rotation.x = -.15;
-    for (const z of [-1, 2, 5]) box('factory-office-window', .1, 1.2, 1.5, 8.85, 5.7, z, blue);
+    for (const z of [-1, 2, 5]) facadeWindow(editor, 'factory-office-window', 1.5, 1.2, 8.8, 5.7, z, 'right', blue, root);
     for (const x of [-5, 0]) attach(MeshBuilder.CreateCylinder('factory-vent', { diameter: .8, height: 1.2, tessellation: 8 }, editor.scene), x, 6.6, 0, steel);
   }
 }

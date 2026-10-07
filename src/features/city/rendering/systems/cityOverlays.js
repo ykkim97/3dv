@@ -64,7 +64,7 @@ export const cityOverlays = {
     for (const guide of this.serviceGuides || []) guide.dispose();
     this.serviceGuides = [];
     if (!this.city) return;
-    const service = calculateUtilityService(this.city);
+    const service = this.getUtilityService?.() || calculateUtilityService(this.city);
     const layers = this.mapLayers || defaultMapLayers;
     for (const facility of service.facilities.values()) {
       if (this.infoVisible && !layers[facility.network]) continue;

@@ -13,6 +13,44 @@ import { PLOT_ELEVATION, PLOT_SURFACES } from '../plots/plotModel.js';
 import { placementProblem } from '../placement/placementRules.js';
 import { validateCity } from '../core/cityValidation.js';
 import { createCurbStone } from '../plots/plotGeometry.js';
+import { facadeWindow } from './builders/facadeWindows.js';
+
+test('facade windows face outward with clearance and retain depth bias in shared building instances', () => {
+  const graphics = new NullEngine(), editor = Object.create(CityEngine.prototype);
+  editor.scene = new Scene(graphics); editor.city = createCity('blank');
+  editor.nodes = []; editor.materials = new Map();
+  editor.shadows = { addShadowCaster() {}, removeShadowCaster() {} };
+  try {
+    const glass = editor.material('test-glass', '#5c7d87');
+    for (const [face, outward] of Object.entries({ front: new Vector3(0, 0, -1), back: new Vector3(0, 0, 1), left: new Vector3(-1, 0, 0), right: new Vector3(1, 0, 0) })) {
+      const mesh = facadeWindow(editor, 'window-test', 2, 1, 0, 0, 0, face, glass, null);
+      const world = mesh.computeWorldMatrix(true);
+      const normal = Vector3.TransformNormal(Vector3.FromArray(mesh.getVerticesData('normal')), world);
+      assert.ok(Vector3.Dot(normal, outward) > 0.99, `${face} is visible from outside`);
+      assert.ok(Math.abs(Vector3.Dot(mesh.position, outward) - 0.08) < 1e-6);
+      assert.equal(mesh.getIndices().length, 6, 'no buried or coplanar box faces');
+      mesh.dispose();
+    }
+    assert.equal(glass.zOffset, 0, 'other uses of the source material are unaffected');
+    for (const [index, asset] of ['house', 'apartment', 'tower', 'office', 'hotel', 'hall', 'school', 'hospital'].entries()) {
+      const record = { id: `facade-${index}`, asset, x: 0, z: 0, rotation: 0 };
+      const root = editor.buildObject(record);
+      const windows = root.getChildMeshes().filter(mesh => mesh.material.name === 'facade:glass');
+      assert.ok(windows.length > 0);
+      for (const mesh of windows) {
+        assert.equal(mesh.material.zOffset, -1);
+        assert.equal(mesh.material.zOffsetUnits, -2);
+        const positions = mesh.sourceMesh.getVerticesData('position');
+        const preset = ASSETS.find(item => item.id === asset);
+        for (let i = 0; i < positions.length; i += 3) {
+          assert.ok(Math.abs(positions[i]) > preset.width / 2 + 0.07 || Math.abs(positions[i + 2]) > preset.depth / 2 + 0.07, `${asset} windows stay outside the wall`);
+        }
+      }
+      const copy = editor.buildObject({ ...record, id: `${record.id}-copy`, x: 20, rotation: Math.PI / 2 });
+      assert.ok(copy.getChildMeshes().filter(mesh => mesh.material.name === 'facade:glass').every(mesh => windows.some(window => window.sourceMesh === mesh.sourceMesh)), 'copies reuse corrected geometry');
+    }
+  } finally { editor.scene.dispose(); graphics.dispose(); }
+});
 
 test('facilities instance shared presets and refresh frozen transforms after terrain edits', () => {
   const graphics = new NullEngine(), editor = Object.create(CityEngine.prototype);
@@ -62,6 +100,10 @@ test('curbstones face outward and site edit handles only appear when selected', 
     editor.city.plots.push(plot);
     editor.buildPlot(plot);
     const meshes = editor.nodes[0].getChildMeshes();
+    const base = meshes.find(mesh => mesh.name === 'plot-base');
+    const baseNormals = base.getVerticesData('normal'), baseIndices = base.getIndices();
+    assert.equal(baseIndices.length, 30, 'site base has sides and bottom but no competing top cap');
+    for (let i = 0; i < baseIndices.length; i += 3) assert.ok(!baseIndices.slice(i, i + 3).every(vertex => baseNormals[vertex * 3 + 1] > 0.9));
     const handles = meshes.filter(mesh => mesh.name === 'plot-corner');
     assert.ok(handles.every(mesh => !mesh.isEnabled()));
     editor.select('site');
@@ -393,7 +435,7 @@ test('power and water presets build distinct pickable facilities on valid plots'
   const utilities = ASSETS.filter(asset => ['power', 'water'].includes(asset.category));
   try {
     assert.deepEqual(CATEGORIES.filter(category => ['power', 'water'].includes(category.id)).map(category => category.name), ['전력 시설', '상하수도 시설']);
-    assert.equal(utilities.length, 14);
+    assert.equal(utilities.length, 17);
     for (const asset of utilities) {
       editor.city = createCity('blank');
       editor.city.plots.push({ id: 'utility-site', x: 0, z: 0, width: Math.max(24, asset.width + 2), depth: Math.max(24, asset.depth + 2) });
@@ -421,6 +463,32 @@ test('power and water presets build distinct pickable facilities on valid plots'
     editor.scene.dispose();
     graphics.dispose();
   }
+});
+
+test('detailed power and water presets stay within geometry budgets and reuse meshes across placements', () => {
+  const graphics = new NullEngine(), editor = Object.create(CityEngine.prototype);
+  editor.scene = new Scene(graphics); editor.city = createCity('blank');
+  editor.nodes = []; editor.materials = new Map();
+  editor.shadows = { addShadowCaster() {}, removeShadowCaster() {} };
+  try {
+    for (const asset of ASSETS.filter(asset => ['power', 'water'].includes(asset.category))) {
+      const object = { id: `utility-detail-${asset.id}`, asset: asset.id, x: 0, z: 0, rotation: 0 };
+      const root = editor.buildObject(object), meshes = root.getChildMeshes();
+      assert.ok(meshes.length <= 8, `${asset.id} stays within eight material batches`);
+      const triangles = meshes.reduce((sum, mesh) => sum + mesh.sourceMesh.getTotalIndices() / 3, 0);
+      const triangleBudget = asset.id === 'nuclear-plant' ? 6000 : asset.category === 'water' ? 4000 : 3200;
+      assert.ok(triangles <= triangleBudget, `${asset.id}: ${triangles} triangles`);
+      for (const mesh of meshes) {
+        assert.ok(mesh.sourceMesh.getVerticesData('position').every(Number.isFinite));
+        assert.ok(mesh.sourceMesh.getVerticesData('normal').every(Number.isFinite));
+      }
+      const geometryCount = editor.scene.geometries.length;
+      const copy = editor.buildObject({ ...object, id: `${object.id}-copy`, x: 40, rotation: Math.PI / 2 });
+      assert.equal(editor.scene.geometries.length, geometryCount, 'placing another facility allocates no new geometry');
+      assert.ok(copy.getChildMeshes().every(mesh => meshes.some(original => original.sourceMesh === mesh.sourceMesh)));
+      assert.ok(copy.getChildMeshes().every(mesh => mesh.metadata.objectId === copy.name));
+    }
+  } finally { editor.scene.dispose(); graphics.dispose(); }
 });
 
 test('first expansion presets render, preview and remain within their placement footprints', () => {

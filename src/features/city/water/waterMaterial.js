@@ -36,7 +36,7 @@ void main() {
   gl_FragColor = vec4(color, opacity * mix(0.65, 1.0, smoothstep(0.0, 3.0, vDepth)));
 }`;
 
-export function createWaterMaterial(scene, name, settings, camera, night = false) {
+export function createWaterMaterial(scene, name, settings, camera, night = false, animationTime = () => performance.now() / 1000) {
   const material = new ShaderMaterial(name, scene, { vertexSource, fragmentSource }, {
     attributes: ['position', 'waterDepth'],
     uniforms: ['worldViewProjection', 'cameraPosition', 'waterColor', 'time', 'opacity', 'daylight'],
@@ -48,7 +48,7 @@ export function createWaterMaterial(scene, name, settings, camera, night = false
   material.setFloat('daylight', night ? 0 : 1);
   material.onBindObservable.add(() => {
     material.setVector3('cameraPosition', camera.globalPosition);
-    material.setFloat('time', settings.flowing ? performance.now() / 1000 : 0);
+    material.setFloat('time', settings.flowing ? animationTime() : 0);
   });
   return material;
 }

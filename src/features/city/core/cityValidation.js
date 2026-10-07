@@ -4,8 +4,11 @@ import { PLOT_SURFACES } from '../plots/plotModel.js';
 import { bridgeById } from '../presets/bridgePresets.js';
 import { validateConnections } from '../connections/connectionModel.js';
 import { validateFacilityProperties } from '../management/facilityProperties.js';
+import { LIFE_SETTING_KEYS } from '../simulation/lifeSettings.js';
 
 export function validateCity(value) {
+  if (value?.powerSupplyMode !== undefined && !['range', 'network'].includes(value.powerSupplyMode)) throw new Error('전력 공급 판정 방식이 올바르지 않습니다.');
+  if (value?.waterSupplyMode !== undefined && !['range', 'network'].includes(value.waterSupplyMode)) throw new Error('수도 공급 판정 방식이 올바르지 않습니다.');
   if (value?.environment !== undefined) {
     const env = value.environment;
     if (!env || !Number.isFinite(env.hour) || env.hour < 0 || env.hour >= 24 || typeof env.autoCycle !== 'boolean'
@@ -32,8 +35,8 @@ export function validateCity(value) {
     const assigned = new Set();
     if (!Array.isArray(value.districts) || value.districts.length > 100 || value.districts.some(district => !district || typeof district.id !== 'string' || typeof district.name !== 'string' || district.name.length > 40 || !/^#[0-9a-f]{6}$/i.test(district.color) || !Array.isArray(district.plotIds) || district.plotIds.some(id => { if (!value.plots.some(plot => plot.id === id) || assigned.has(id)) return true; assigned.add(id); return false; })) || new Set(value.districts.map(item => item.id)).size !== value.districts.length) throw new Error('구역 데이터가 올바르지 않습니다.');
   }
-  if (value.lifeSettings !== undefined && (!value.lifeSettings || typeof value.lifeSettings !== 'object' || Array.isArray(value.lifeSettings) || ['enabled', 'cars', 'people'].some(key => value.lifeSettings[key] !== undefined && typeof value.lifeSettings[key] !== 'boolean'))) throw new Error('도시 생활 연출 설정이 올바르지 않습니다.');
-  if (value.cameraViews !== undefined && (!Array.isArray(value.cameraViews) || value.cameraViews.length > 30 || value.cameraViews.some(view => !view || typeof view.id !== 'string' || typeof view.name !== 'string' || view.name.length > 40 || !Number.isFinite(view.alpha) || !Number.isFinite(view.beta) || view.beta < 0 || view.beta > Math.PI / 2 || !Number.isFinite(view.radius) || view.radius < 25 || view.radius > cameraLimit || !view.target || [view.target.x, view.target.y, view.target.z].some(axis => !Number.isFinite(axis) || Math.abs(axis) > 10000)) || new Set(value.cameraViews.map(view => view.id)).size !== value.cameraViews.length)) throw new Error('카메라 시점 데이터가 올바르지 않습니다.');
+  if (value.lifeSettings !== undefined && (!value.lifeSettings || typeof value.lifeSettings !== 'object' || Array.isArray(value.lifeSettings) || LIFE_SETTING_KEYS.some(key => value.lifeSettings[key] !== undefined && typeof value.lifeSettings[key] !== 'boolean'))) throw new Error('도시 생활 연출 설정이 올바르지 않습니다.');
+  if (value.cameraViews !== undefined && (!Array.isArray(value.cameraViews) || value.cameraViews.length > 30 || value.cameraViews.some(view => !view || typeof view.id !== 'string' || typeof view.name !== 'string' || view.name.length > 40 || !Number.isFinite(view.alpha) || !Number.isFinite(view.beta) || view.beta < 0 || view.beta > Math.PI / 2 || !Number.isFinite(view.radius) || view.radius < 2 || view.radius > cameraLimit || !view.target || [view.target.x, view.target.y, view.target.z].some(axis => !Number.isFinite(axis) || Math.abs(axis) > 10000) || view.screenOffset !== undefined && (!view.screenOffset || [view.screenOffset.x, view.screenOffset.y].some(axis => !Number.isFinite(axis) || Math.abs(axis) > 10000))) || new Set(value.cameraViews.map(view => view.id)).size !== value.cameraViews.length)) throw new Error('카메라 시점 데이터가 올바르지 않습니다.');
   if (new Set(all.map(o => o.id)).size !== all.length) throw new Error('중복된 시설 ID가 있습니다.');
   validateConnections(value);
   return value;

@@ -1,0 +1,9 @@
+.recovery-panel { width: min(600px, calc(100vw - 32px)); max-height: 85dvh; overflow: auto; border-radius: 16px; padding: 26px; color: #e1eee5; }
+.recovery-panel h2 { margin: 0 0 12px; font-size: 20px; }.recovery-panel h3 { font-size: 14px; }
+.recovery-panel p, .recovery-panel small { color: #b6cdc2; font-size: 12px; line-height: 1.7; }
+.recovery-panel button, .autosave-status button { color: #e1eee5; border: 1px solid #587166; background: #30473f; padding: 7px 10px; border-radius: 6px; }
+.recovery-list { max-height: 48dvh; overflow: auto; }.recovery-list article { border: 1px solid #ffffff20; border-radius: 8px; padding: 12px; margin: 10px 0; }
+.recovery-list article > div { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin: 8px 0; font-size: 12px; }.recovery-list small { display: block; }
+.recovery-actions, .autosave-status { display: flex; align-items: center; gap: 8px; }.recovery-actions { margin: 16px 0; }
+.city-app .autosave-status button { font-size: 10px; padding: 5px 7px; }.autosave-status[data-state=error] button, .recovery-panel .recovery-error { color: #ffb6a4; }
+@media (max-width: 1100px) { .header-actions .autosave-status { display: none; } }

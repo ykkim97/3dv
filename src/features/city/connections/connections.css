@@ -17,4 +17,10 @@
 .connection-list span { display: block; font-size: 10px; overflow-wrap: anywhere; }
 .connection-list i { display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; }
 .connection-list .selected button { border-color: #38df87; }
+.waypoint-editor { margin: 12px 0; padding: 10px; border: 1px solid #587166; border-radius: 8px; }
+.waypoint-editor summary { cursor: var(--action-pointer); font-weight: 700; }
+.waypoint-editor ol { padding-left: 0; list-style: none; max-height: 260px; overflow-y: auto; }
+.waypoint-editor li { border-top: 1px solid #587166; padding: 7px 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.waypoint-editor li label { margin: 0; gap: 4px; }
+.waypoint-editor li .connection-actions { width: 100%; }
 @media (max-width: 600px) { .connection-panel { top: 105px; right: 58px; width: calc(100vw - 80px); max-height: calc(100dvh - 175px); } }

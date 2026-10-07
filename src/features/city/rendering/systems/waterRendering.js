@@ -27,7 +27,7 @@ export const waterRendering = {
       vertices.positions = data.positions; vertices.indices = data.indices; vertices.applyToMesh(mesh);
       mesh.setVerticesData('waterDepth', data.depths, false, 1);
       mesh.parent = root; mesh.metadata = { waterId: region.id };
-      mesh.material = createWaterMaterial(this.scene, region.id, { ...settings, flowing: this.city.waterSettings?.flowing === false ? false : settings.flowing }, this.camera, this.night);
+      mesh.material = createWaterMaterial(this.scene, region.id, { ...settings, flowing: this.city.waterSettings?.flowing === false ? false : settings.flowing }, this.camera, this.night, () => this.flowTime || 0);
       this.waterNodes.push(root);
     }
   }

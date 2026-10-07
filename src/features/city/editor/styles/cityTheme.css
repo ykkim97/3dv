@@ -1,0 +1,379 @@
+/* Shared presentation layer. Layout and interaction rules stay in their feature files. */
+.city-app {
+  --mint: #86e3cd;
+  --city-text: #edf2f6;
+  --city-muted: #a2afbd;
+  --ui-panel: #1b232ef5;
+  --ui-surface: #ffffff06;
+  --ui-border: #c2d3e51c;
+  --ui-accent-surface: #86e3cd16;
+  --ui-shadow: 0 12px 32px #0b142330, inset 0 1px 0 #ffffff06;
+  --hud-gap: 14px;
+  --hud-top: 104px;
+  --dock-space: 260px;
+  font-size: 12px;
+  letter-spacing: -.15px;
+  -webkit-font-smoothing: antialiased;
+}
+.city-app.tray-collapsed { --dock-space: 90px; }
+.city-app .glass {
+  color: var(--city-text);
+  background: var(--ui-panel);
+  border: 1px solid var(--ui-border);
+  box-shadow: var(--ui-shadow);
+  backdrop-filter: blur(12px);
+}
+.city-app button:not(.city-manual button) {
+  border-radius: 8px;
+  transition: background-color .16s ease, border-color .16s ease, color .16s ease;
+}
+.city-app button:hover:not(:disabled):not(.city-manual button) {
+  background-color: #ffffff0c;
+  border-color: #c2d3e536;
+}
+.city-app button.active:not(.city-manual button),
+.city-app button[aria-pressed=true]:not(.city-manual button) {
+  color: var(--mint);
+  background: var(--ui-accent-surface);
+  border-color: #86e3cd38;
+}
+.city-app :is(input, select, textarea):not(.city-manual *) {
+  color: var(--city-text);
+  font: inherit;
+  background-color: #1119258a;
+  border: 1px solid var(--ui-border);
+  border-radius: 8px;
+  accent-color: var(--mint);
+  color-scheme: dark;
+}
+.city-app :is(input, select, textarea):focus-visible:not(.city-manual *) {
+  outline: 2px solid var(--mint);
+  outline-offset: 2px;
+}
+.city-app input::placeholder, .city-app textarea::placeholder { color: #7d8c9e; }
+.city-app input[type=range] { background: transparent; border: 0; }
+.city-app :is(input[type=checkbox], input[type=radio]) { flex-shrink: 0; }
+.city-app :is(input[type=color]) { padding: 3px; }
+.city-app :is(.tray-content, .information-dock-content, .asset-list, .connection-list, .modal-backdrop section) {
+  scrollbar-width: thin;
+  scrollbar-color: #68768a66 transparent;
+}
+.city-app .panel-label { font-size: 11px; font-weight: 600; color: var(--city-text); }
+.city-app .eyebrow { color: var(--mint); letter-spacing: 1.5px; }
+
+/* Navigation is one calm strip; only the save action carries a solid accent. */
+.city-app .city-header {
+  top: 40px;
+  height: 52px;
+  padding: 0 16px;
+  gap: 10px;
+  border-radius: 14px;
+}
+.city-app .brand { gap: 9px; font-size: 13px; letter-spacing: 1.8px; }
+.city-app .brand-symbol {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  color: var(--mint);
+  background: #86e3cd0d;
+  border-color: #86e3cd2e;
+}
+.city-app .brand span:not(.brand-symbol) { color: var(--city-muted); font-size: 7px; letter-spacing: 2.5px; }
+.city-app .header-divider { height: 28px; background: var(--ui-border); margin: 0 3px; }
+.city-app .city-title input { width: 124px; background: transparent; border: 0; border-radius: 4px; font-size: 12px; }
+.city-app .city-title>span { font-size: 9px; color: var(--city-muted); margin-top: 3px; }
+.city-app .city-header>button, .city-app .header-menu-trigger {
+  min-height: 34px;
+  height: 34px;
+  font-size: 11px !important;
+  padding: 7px 10px;
+  color: #c6d0dc;
+  border-color: transparent !important;
+  white-space: nowrap;
+}
+.city-app .header-menu-trigger[aria-expanded=true], .city-app .directory-trigger[aria-expanded=true] {
+  background: var(--ui-accent-surface);
+  color: var(--mint);
+}
+.city-app .header-actions { gap: 5px; }
+.city-app .header-actions>button { min-height: 34px; padding: 7px 9px; }
+.city-app .header-actions .save-button {
+  background: var(--mint);
+  color: #12342d;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 8px 13px;
+  box-shadow: 0 2px 8px #86e3cd14;
+}
+.city-app .header-actions .save-button:hover { background: #acf0df; }
+.city-app .save-state { display: none; }
+.city-app .autosave-status button { background: transparent; border-color: transparent; color: var(--city-muted); font-size: 10px; }
+.city-app .header-menu-panel { top: calc(100% + 14px); width: 270px; padding: 9px; border-radius: 12px; }
+.city-app .header-menu-panel button { min-height: 38px; padding: 9px 10px; font-size: 12px; color: #d8e0e9; }
+.city-app .menu-section-label { padding: 10px 10px 6px; font-size: 10px; color: #8b9aac; letter-spacing: .5px; }
+.city-app .menu-divider { border-color: var(--ui-border); }
+.city-app .menu-value { color: var(--mint); background: #86e3cd0c; border-radius: 5px; padding: 2px 6px; }
+
+/* Summary, tools and inspector use the same edge spacing. */
+.city-app .world-summary { top: var(--hud-top); padding: 10px 14px; gap: 15px; border-radius: 12px; }
+.city-app .summary-primary strong { font-size: 22px; letter-spacing: -.7px; font-variant-numeric: tabular-nums; }
+.city-app .summary-grid { gap: 14px; }
+.city-app .summary-grid b { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.city-app .summary-grid span { color: var(--city-muted); font-size: 9px; }
+.city-app .summary-utilities { gap: 9px; padding-left: 14px; border-color: var(--ui-border); }
+.city-app .summary-utilities span, .city-app .summary-utilities b { font-size: 10px; }
+.city-app .scene-tools { padding: 6px; gap: 4px; border-radius: 12px; }
+.city-app .scene-tools button { width: 34px; height: 34px; min-height: 34px; color: #b9c6d5; }
+.city-app .scene-tools button svg { width: 18px; height: 18px; }
+.city-app .scene-tools>span { background: var(--ui-border); margin: 3px 5px; }
+.city-app .right-information-dock { top: 166px; bottom: 44px; width: min(320px, calc(100% - 76px)); max-height: min(680px, calc(100% - 210px)); border-radius: 14px; }
+.city-app .information-dock-content { flex: 1; }
+.city-app .information-dock-tabs { gap: 4px; padding: 8px; background: #11192536; border-color: var(--ui-border); }
+.city-app .information-dock-tabs button { font-size: 11px; min-height: 30px; padding: 5px 7px; color: var(--city-muted); }
+.city-app .right-information-dock :is(.selection-panel, .grid-operations, .connection-panel, .lighting-panel, .service-badge-legend) {
+  padding: 14px;
+  color: var(--city-text);
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+.city-app .right-information-dock :is(h2, header strong) { font-size: 18px; font-weight: 650; letter-spacing: -.6px; margin: 10px 0 6px; }
+.city-app .right-information-dock :is(p, small) { color: var(--city-muted); line-height: 1.6; }
+.city-app .right-information-dock p { font-size: 12px; }
+.city-app .right-information-dock :is(label, summary) { font-size: 12px; color: #cbd6e2; }
+.city-app .right-information-dock .facility-properties label { font-size: 11px; color: #cbd6e2; gap: 6px; margin: 9px 0; }
+.city-app .right-information-dock .facility-properties small { font-size: 11px; color: var(--city-muted); }
+.city-app .right-information-dock :is(button, select, input:not([type=checkbox]):not([type=range]):not([type=color]), textarea) {
+  min-height: 32px;
+  border-radius: 8px;
+  border-color: var(--ui-border);
+  background-color: var(--ui-surface);
+  color: var(--city-text);
+}
+.city-app .right-information-dock .facility-properties :is(input, select) { min-height: 32px; }
+.city-app .inspector-details { margin: 10px 0; border-color: var(--ui-border); }
+.city-app .inspector-details summary { padding: 10px 0; font-weight: 600; }
+.city-app :is(.grid-operation-metrics div, .performance-metrics>div, .service-status-card, .recovery-list article) {
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+  padding: 12px;
+}
+.city-app .grid-operation-metrics { gap: 10px; margin: 16px 0; }
+.city-app .grid-operation-metrics b { font-size: 24px; font-weight: 600; }
+.city-app .grid-operation-metrics :is(span, em), .city-app .performance-metrics dt { color: var(--city-muted); }
+.city-app :is(.waypoint-editor, .facility-properties, .service-status, .operation-help) { border-color: var(--ui-border); border-radius: 10px; }
+.city-app .operation-help { background: #ffffff03; padding: 10px 12px; }
+.city-app .operation-eyebrow { color: var(--city-muted); }
+.city-app .connection-title { font-size: 15px; font-weight: 650; }
+.city-app .connection-count { color: var(--city-muted); font-size: 11px; font-weight: 400; margin-left: 6px; }
+.city-app .connection-context { padding: 10px; margin: 12px 0; background: var(--ui-surface); border: 1px solid var(--ui-border); border-radius: 8px; }
+.city-app .connection-context strong { display: block; font-size: 11px; margin-bottom: 4px; }
+.city-app .connection-context>span { color: var(--city-muted); font-size: 11px; line-height: 1.6; overflow-wrap: anywhere; }
+.city-app .connection-section { border-top: 1px solid var(--ui-border); margin-top: 12px; padding-top: 4px; }
+.city-app .connection-section>summary { padding: 9px 0; font-weight: 600; cursor: var(--action-pointer); }
+.city-app :is(.connection-section, .waypoint-editor)>summary>span { color: var(--city-muted); font-size: 10px; margin-left: 5px; font-weight: 400; }
+.city-app .connection-panel>label, .city-app .connection-section>label { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 6px; margin: 8px 0; }
+.city-app .connection-panel label select { max-width: 160px; min-width: 0; }
+.city-app .connection-section>label>select:last-child, .city-app .connection-section>label>input:last-child,
+.city-app .connection-panel>label>select:last-child, .city-app .connection-panel>label>input:last-child { grid-column: 2 / 4; }
+.city-app .connection-panel :is(.connection-help, .waypoint-coordinates) { margin-top: 10px; padding: 8px; background: #ffffff03; border-radius: 7px; }
+.city-app .connection-help>summary, .city-app .waypoint-coordinates>summary { color: var(--city-muted); font-size: 11px; cursor: var(--action-pointer); }
+.city-app .connection-help :is(p, small) { font-size: 11px; margin: 8px 0 0; }
+.city-app .waypoint-editor { padding: 10px; }
+.city-app .waypoint-editor p { font-size: 11px; margin: 8px 0; }
+.city-app .waypoint-editor li { border-color: var(--ui-border); gap: 5px; }
+.city-app .waypoint-editor li input { width: 68px; }
+.city-app .connection-panel .connection-actions { gap: 6px; }
+.city-app .connection-panel .connection-actions button { font-size: 11px; padding: 6px 8px; }
+.city-app .connection-list>div { margin: 8px 0; gap: 6px; }
+.city-app .connection-list>div>button:first-child { padding: 10px; border-radius: 9px; }
+.city-app .connection-list .selected button { border-color: #86e3cd66; background: var(--ui-accent-surface); }
+.city-app .delete-button { color: #f4a998 !important; background: #ef8e7810 !important; border-color: #ef8e782b !important; }
+.city-app .badge-good { color: #86e3cd; }
+.city-app .badge-missing { color: #f4a998; }
+.city-app .badge-shortage { color: #f0d58c; }
+
+/* Library cards separate a quiet thumbnail from readable labels and dimensions. */
+.city-app .bottom-workspace { bottom: 44px; gap: 14px; }
+.city-app.map-open .bottom-workspace { display: grid; grid-template-columns: 176px minmax(0, 1fr); column-gap: 12px; align-items: stretch; }
+.city-app .build-dock { width: min(1040px, calc(100% - 190px)); border-radius: 14px; }
+.city-app:not(.map-open) .build-dock { width: min(1040px, calc(100% - 70px)); }
+.city-app.has-information-dock .bottom-workspace { right: 348px; }
+.city-app.has-information-dock .build-dock { width: 100%; flex: 1; }
+.city-app.map-open .bottom-workspace .build-dock { width: 100%; max-width: none; min-width: 0; margin: 0; }
+.city-app .category-tabs { height: 48px; gap: 3px; padding: 6px 10px; background: #11192536; border-bottom-color: var(--ui-border); }
+.city-app .category-tabs>button { height: 34px !important; min-height: 34px; font-size: 11px !important; padding: 7px 10px; color: var(--city-muted); }
+.city-app .category-tabs>button.active { background: var(--ui-accent-surface); color: var(--mint); border-color: #86e3cd38; }
+.city-app .category-tabs .collapse-tray { background: #1b232e; box-shadow: -6px 0 10px #1b232e; }
+.city-app .tray-content { padding: 12px 14px 14px; max-height: 184px; }
+.city-app .tray-heading { gap: 8px 12px; margin-bottom: 10px; }
+.city-app .tray-heading h2 { font-size: 12px; font-weight: 650; }
+.city-app .tray-heading h2 span { color: #8595a8; font-size: 8px; letter-spacing: 1.2px; }
+.city-app .tray-heading>input { width: 160px; height: 30px; min-height: 30px; font-size: 11px; padding: 6px 10px; }
+.city-app .asset-list { min-height: 125px; gap: 9px; padding: 1px 1px 6px; }
+.city-app .asset-card {
+  width: 144px !important;
+  min-width: 144px !important;
+  min-height: 122px;
+  padding: 0 10px 10px;
+  gap: 5px;
+  background: #ffffff04;
+  border-color: var(--ui-border);
+  border-radius: 10px;
+}
+.city-app .asset-card:hover { background: #ffffff09; border-color: #c2d3e540; }
+.city-app .asset-card.selected { background: var(--ui-accent-surface); border-color: #86e3cd80; }
+.city-app .asset-card b { color: var(--city-text); font-size: 11px; line-height: 1.4; font-weight: 650; }
+.city-app .asset-card small { color: var(--city-muted); font-size: 9px; line-height: 1.4; }
+.city-app .asset-size { color: #9baabd; font-size: 9px; font-variant-numeric: tabular-nums; margin-top: auto; }
+.city-app .asset-preview { height: 58px; transform: scale(.8); margin: 0 0 4px; }
+.city-app .asset-check { background: var(--mint); color: #173b32; width: 17px; height: 17px; top: 7px; right: 7px; }
+.city-app .plot-preview { height: 58px; margin: 0 auto 6px; }
+.city-app .plot-card b>span { color: var(--city-muted); font-size: 9px; }
+.city-app .road-preview { height: 54px; }
+.city-app .bridge-card-preview { height: 60px; }
+.city-app .brush-list { gap: 9px; }
+.city-app .brush-list button { height: 90px; min-width: 64px; gap: 12px; border-radius: 10px; background: var(--ui-surface); border-color: var(--ui-border); color: #bdcbd9; }
+.city-app .brush-list b { font-size: 11px; font-weight: 500; }
+.city-app .brush-list button.selected { color: var(--mint); background: var(--ui-accent-surface); border-color: #86e3cd66; }
+.city-app .brush-settings label { color: var(--city-muted); font-size: 11px; }
+.city-app .brush-settings b { color: var(--city-text); }
+.city-app.map-open .minimap {
+  position: relative; left: auto; bottom: auto; margin: 0;
+  display: flex; flex-direction: column; align-self: stretch;
+  contain: size; min-height: 0; overflow-y: auto;
+  scrollbar-width: thin; scrollbar-color: #68768a66 transparent;
+}
+.city-app .minimap { width: 176px; border-radius: 14px; padding: 10px; flex-shrink: 0; }
+.city-app .minimap>svg { width: 100%; height: 0; min-height: 0; flex: 1 1 0; margin: 8px 0; border-radius: 6px; background: #11192566; }
+.city-app .minimap :is(.panel-label, .minimap-footer, .map-info-legend, .map-expand-button) { flex-shrink: 0; }
+.city-app .minimap .map-info-legend { font-size: 9px; line-height: 1.5; }
+.city-app .minimap .map-expand-button { font-size: 10px; min-height: 28px; padding: 4px 6px; margin-top: 6px; }
+.city-app .minimap-footer { color: var(--city-muted); font-size: 9px; }
+.city-app .minimap-footer span { color: #8292a5; }
+.city-app.tray-collapsed .minimap { flex-direction: row; align-items: center; gap: 8px; padding: 6px 8px; overflow: hidden; }
+.city-app.tray-collapsed .minimap>svg { order: -1; width: 34px; height: 34px; flex: 0 0 34px; margin: 0; }
+.city-app.tray-collapsed .minimap .panel-label { flex: 1; min-width: 0; flex-wrap: wrap; gap: 3px; }
+.city-app.tray-collapsed .minimap :is(.minimap-footer, .map-info-legend, .map-expand-button) { display: none; }
+.city-app .city-status { height: 30px; padding: 0 18px; background: #18212ef5; border-color: var(--ui-border); color: #95a5b8; font-size: 10px; }
+.city-app .city-status b { color: var(--city-text); font-size: 11px; }
+.city-app .world-heading { top: 168px; left: 80px; }
+.city-app .city-toast { top: var(--hud-top); padding: 13px 20px; border-radius: 12px; font-size: 12px; }
+
+/* All dialogs share typography, spacing and subdued fields. */
+.city-app .modal-backdrop { background: #0b142394; backdrop-filter: blur(5px); }
+.city-app .modal-backdrop>section { border-radius: 18px; padding: 28px; color: var(--city-text); }
+.city-app .modal-backdrop h2 { font-size: 23px; font-weight: 650; letter-spacing: -.7px; }
+.city-app .modal-backdrop :is(p, small) { color: var(--city-muted); line-height: 1.75; }
+.city-app .modal-backdrop button:not(.preset-card) { min-height: 36px; padding: 8px 12px; border-color: var(--ui-border); background-color: var(--ui-surface); }
+.city-app .modal-backdrop :is(select, input:not([type=checkbox]):not([type=range]):not([type=color]), textarea) { min-height: 36px; padding: 8px 10px; }
+.city-app .preset-card { border-radius: 12px; border-color: var(--ui-border); background: var(--ui-surface); }
+.city-app .preset-card h3 { color: var(--city-text); font-size: 15px; }
+.city-app .preset-card p { font-size: 11px; }
+.city-app .diagnostics-grid article { background: var(--ui-surface); border-color: var(--ui-border); border-radius: 12px; padding: 16px; }
+.city-app .diagnostics-grid article strong { color: var(--city-text); font-size: 26px; }
+.city-app .diagnostics-grid article.needs-attention { border-color: #f0d58c42; background: #f0d58c08; }
+.city-app .diagnostics-issues li { border-color: var(--ui-border); padding: 12px 0; }
+.city-app .facility-directory li+li { border-color: var(--ui-border); }
+.city-app .facility-directory li button { padding: 13px 10px; gap: 12px; }
+.city-app .facility-directory li strong { font-size: 13px; }
+.city-app .facility-directory li small { font-size: 11px; color: var(--city-muted); }
+.city-app .preset-art { height: 118px; }
+.city-app .current-map-settings { border-color: var(--ui-border); background: var(--ui-surface); border-radius: 12px; padding: 16px; }
+.city-app .recovery-actions { gap: 10px; }
+
+/* Preserve viewport space on smaller displays and avoid header wrapping. */
+@media (max-width: 1280px) {
+  .city-app .city-title input { width: 90px; }
+  .city-app .brand { font-size: 11px; gap: 6px; }
+  .city-app .city-header { gap: 5px; padding: 0 10px; }
+  .city-app .header-menu-trigger, .city-app .city-header>button { padding: 6px 8px; }
+  .city-app .header-actions .autosave-status { display: none; }
+  .city-app .minimap { width: 156px; }
+  .city-app.map-open .bottom-workspace { grid-template-columns: 156px minmax(0, 1fr); }
+}
+@media (max-width: 1000px) {
+  .city-app .city-title { display: none; }
+  .city-app .right-information-dock { width: 300px; bottom: calc(44px + var(--dock-space)); }
+  .city-app.has-information-dock .bottom-workspace { right: var(--hud-gap); }
+  .city-app .build-dock { flex: 1; width: auto; }
+  .city-app .world-summary { gap: 10px; max-width: calc(100% - 85px); }
+}
+@media (max-width: 760px) {
+  .city-app { --hud-gap: 8px; --hud-top: 100px; --dock-space: 240px; }
+  .city-app.tray-collapsed { --dock-space: 80px; }
+  .city-app .city-header { top: 40px; height: 48px; border-radius: 11px; gap: 3px; }
+  .city-app .brand { font-size: 10px; letter-spacing: 1px; }
+  .city-app .brand-symbol, .city-app .brand span:not(.brand-symbol), .city-app .header-divider { display: none; }
+  .city-app .city-header .hud-button-text, .city-app .header-menu-trigger .menu-chevron { display: none; }
+  .city-app .header-menu-trigger, .city-app .city-header>button { padding: 7px; }
+  .city-app .header-actions { gap: 1px; }
+  .city-app .header-actions>button { padding: 6px; }
+  .city-app .header-actions .save-button { font-size: 0; padding: 8px; gap: 0; }
+  .city-app .header-menu-panel { position: fixed; top: 72px; right: 8px; left: auto; width: min(300px, calc(100vw - 16px)); }
+  .city-app .world-summary { padding: 8px 10px; gap: 8px; }
+  .city-app .summary-primary strong { font-size: 18px; }
+  .city-app .summary-utilities { padding-left: 8px; gap: 6px; }
+  .city-app .summary-grid { display: none; }
+  .city-app .summary-utilities span, .city-app .summary-utilities b { font-size: 9px; }
+  .city-app .right-information-dock { top: 154px; bottom: calc(36px + var(--dock-space)); width: min(300px, calc(100% - 76px)); max-height: calc(100% - 190px); }
+  .city-app .bottom-workspace { bottom: 36px; }
+  .city-app.map-open .minimap { width: 120px; padding: 8px; }
+  .city-app.map-open .bottom-workspace { grid-template-columns: 120px minmax(0, 1fr); column-gap: 10px; }
+  .city-app .build-dock, .city-app:not(.map-open) .build-dock { width: 100%; }
+  .city-app .category-tabs { height: 44px; padding: 5px 7px; }
+  .city-app .category-tabs>button { font-size: 10px !important; padding: 6px 8px; }
+  .city-app .tray-content { padding: 10px; max-height: 170px; }
+  .city-app .tray-heading h2 span { display: none; }
+  .city-app .tray-heading>input { width: 120px; }
+  .city-app .asset-card { width: 132px !important; min-width: 132px !important; }
+  .city-app .world-heading { left: 68px; top: 164px; }
+}
+@media (max-width: 520px) {
+  .city-app .city-header .brand { display: none; }
+  .city-app .city-header { padding: 0 6px; }
+  .city-app .summary-utilities { flex-wrap: wrap; }
+  .city-app .modal-backdrop { padding: 12px; }
+  .city-app .modal-backdrop>section { padding: 20px; border-radius: 14px; }
+  .city-app .directory-filters { flex-wrap: wrap; }
+  .city-app .directory-filters select { max-width: 100%; width: 100%; }
+  .city-app.map-open .bottom-workspace { grid-template-columns: 96px minmax(0, 1fr); column-gap: 8px; }
+  .city-app.map-open .minimap { width: 96px; padding: 7px; }
+  .city-app.tray-collapsed .minimap .panel-label>span { display: none; }
+  .city-app .minimap-footer { flex-wrap: wrap; gap: 3px; font-size: 8px; }
+}
+@media (max-height: 650px) {
+  .city-app { --dock-space: 215px; }
+  .city-app.tray-collapsed { --dock-space: 80px; }
+  .city-app .tray-content { max-height: 140px; padding: 9px 12px; }
+  .city-app .asset-card { min-height: 100px; gap: 3px; padding-bottom: 7px; }
+  .city-app .asset-preview { height: 42px; transform: scale(.67); }
+  .city-app .plot-preview { height: 42px; }
+  .city-app .brush-list button { height: 70px; }
+}
+@media (max-height: 480px) {
+  .city-app { --hud-top: 86px; --hud-gap: 6px; --dock-space: 168px; }
+  .city-app.tray-collapsed { --dock-space: 72px; }
+  .city-app .city-header { top: 38px; height: 40px; }
+  .city-app .header-menu-panel { top: 56px; max-height: calc(100dvh - 64px); }
+  .city-app .world-summary { top: var(--hud-top); padding: 6px 10px; }
+  .city-app .right-information-dock { top: 132px; bottom: 36px; max-height: calc(100% - 168px); }
+  .city-app .scene-tools { top: 132px; }
+  .city-app .tray-content { max-height: 96px; }
+  .city-app .asset-card { min-height: 57px; }
+  .city-app .asset-preview, .city-app .plot-preview { display: none; }
+  .city-app .city-toast { top: var(--hud-top); }
+}
+@media (max-height: 480px) and (min-width: 761px) and (max-width: 1000px) {
+  .city-app.has-information-dock .bottom-workspace { right: 320px; }
+}
+@media (max-height: 480px) and (max-width: 760px) {
+  .city-app .right-information-dock { bottom: calc(36px + var(--dock-space)); }
+  .city-app .information-dock-tabs { padding: 6px; gap: 3px; }
+  .city-app .information-dock-tabs button { min-height: 28px; padding: 4px 6px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .city-app button { transition: none; }
+}

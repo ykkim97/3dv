@@ -8,6 +8,10 @@ import { CityEngine } from '../rendering/CityEngine.js';
 import { CityLife, roadTravel } from './CityLife.js';
 import { createCity } from '../core/cityState.js';
 import { roadProfile } from '../roads/roadGeometry.js';
+import { validateCity } from '../core/cityValidation.js';
+import { LIFE_SETTING_KEYS } from './lifeSettings.js';
+import { AMBIENT_LIMITS } from './AmbientLife.js';
+import { spreadSites, steamPixels } from './AmbientLife.js';
 
 test('visual traffic follows linked roads, pauses and never becomes selectable', () => {
   const graphics = new NullEngine(), editor = Object.create(CityEngine.prototype);
@@ -65,4 +69,76 @@ test('bridge pedestrians remain on the deck and footbridges never carry cars', (
     assert.ok(Math.abs(life.actors[0].root.position.z) < 1);
     assert.equal(life.lamps.length, 0);
   } finally { editor.scene.dispose(); graphics.dispose(); }
+});
+
+test('ambient effects follow facilities, honor night and toggles, reuse geometry and remain bounded', () => {
+  const graphics = new NullEngine(), editor = Object.create(CityEngine.prototype);
+  editor.scene = new Scene(graphics); editor.materials = new Map();
+  new ArcRotateCamera('camera', .6, .8, 80, Vector3.Zero(), editor.scene);
+  const city = createCity('blank');
+  city.objects = [
+    { id: 'park', asset: 'park', x: 10, z: 10, rotation: 0 },
+    { id: 'plant', asset: 'power-plant', x: -20, z: -10, rotation: Math.PI / 2 },
+    ...Array.from({ length: 30 }, (_, i) => ({ id: `garden-${i}`, asset: 'playground', x: -90 + i * 6, z: 60, rotation: 0 })),
+    ...Array.from({ length: 30 }, (_, i) => ({ id: `plant-${i}`, asset: 'nuclear-plant', x: -90 + i * 6, z: -60, rotation: 0 })),
+  ];
+  const life = new CityLife(editor);
+  try {
+    life.update(city);
+    const ambient = life.ambient;
+    for (const [key, limit] of Object.entries(AMBIENT_LIMITS)) assert.equal(ambient.actors.filter(a => a.kind === key).length, limit);
+    const puff = ambient.actors.find(a => a.kind === 'steam');
+    editor.scene.render();
+    const normal = Vector3.TransformNormal(new Vector3(0, 0, 1), puff.puff.computeWorldMatrix(true)).normalize();
+    const view = editor.scene.activeCamera.getForwardRay().direction;
+    assert.ok(Math.abs(Vector3.Dot(normal, view)) > .99, 'soft steam faces the camera');
+    const meshes = editor.scene.meshes.length, materials = editor.scene.materials.length;
+    const position = ambient.actors[0].root.position.clone();
+    for (let i = 0; i < 100; i++) life.tick(.03);
+    assert.notDeepEqual(ambient.actors[0].root.position, position);
+    assert.equal(editor.scene.meshes.length, meshes);
+    assert.equal(editor.scene.materials.length, materials);
+    assert.equal(ambient.templates.size, 9);
+    assert.equal(new Set(ambient.actors.filter(a => a.kind === 'steam').map(a => a.puff.material.diffuseTexture)).size, 1, 'all steam shares one soft texture');
+    assert.ok(puff.puff.material.alpha > 0 && puff.puff.material.alpha <= .36);
+    assert.ok(ambient.root.getChildMeshes().every(m => !m.isPickable));
+    life.setNight(true);
+    assert.equal(ambient.groups.birds.isEnabled(), false);
+    assert.equal(ambient.groups.garden.isEnabled(), true);
+    assert.ok(ambient.templates.get('garden-wing').material.emissiveColor.g > .5);
+    life.setNight(false);
+    assert.equal(ambient.groups.birds.isEnabled(), true);
+    life.settings.enabled = false; const paused = puff.root.position.clone(); life.tick(1);
+    assert.deepEqual(puff.root.position, paused);
+    assert.ok(Object.values(ambient.groups).every(group => !group.isEnabled()));
+    life.update({ ...city, lifeSettings: { birds: false, garden: false, steam: false } });
+    assert.ok(ambient.root.isDisposed());
+    assert.equal(life.ambient.actors.length, 0);
+    const size = editor.scene.meshes.length;
+    for (let i = 0; i < 3; i++) life.update({ ...city, lifeSettings: { birds: false, garden: false, steam: false } });
+    assert.equal(editor.scene.meshes.length, size, 'rebuilding does not leak meshes');
+    life.update({ ...city, objects: [city.objects[1]] });
+    const rotatedPuff = life.ambient.actors.find(a => a.kind === 'steam');
+    assert.ok(Math.abs(rotatedPuff.x - (-18.9)) < 1e-6);
+    assert.ok(Math.abs(rotatedPuff.z - (-12.1)) < 1e-6);
+  } finally { editor.scene.dispose(); graphics.dispose(); }
+});
+
+test('scenery sites are distributed and steam has soft transparent edges', () => {
+  const sites = spreadSites([{ x: 0, z: 0 }, { x: 1, z: 1 }, { x: 80, z: 0 }, { x: -80, z: 0 }, { x: 0, z: 80 }], 3);
+  assert.equal(sites.length, 3);
+  for (let i = 0; i < sites.length; i++) for (let j = i + 1; j < sites.length; j++) assert.ok(Math.hypot(sites[i].x - sites[j].x, sites[i].z - sites[j].z) >= 80);
+  const pixels = steamPixels(), alpha = Array.from(pixels).filter((_, index) => index % 4 === 3);
+  assert.equal(pixels.length, 64 * 64 * 4);
+  assert.equal(alpha[0], 0);
+  assert.ok(alpha.some(a => a > 0 && a < 80));
+  assert.ok(alpha.some(a => a > 150));
+});
+
+test('ambient options survive city files and reject non-boolean values', () => {
+  const city = createCity('blank');
+  city.lifeSettings = { enabled: true, cars: false, people: true, birds: false, garden: true, steam: false };
+  assert.deepEqual(validateCity(JSON.parse(JSON.stringify(city))).lifeSettings, city.lifeSettings);
+  for (const key of LIFE_SETTING_KEYS) assert.throws(() => validateCity({ ...city, lifeSettings: { [key]: 'false' } }));
+  assert.doesNotThrow(() => validateCity(createCity('blank')), 'older files without options still load');
 });

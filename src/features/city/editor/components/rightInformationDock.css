@@ -1,0 +1,57 @@
+.city-app .right-information-dock {
+  position: absolute; top: 126px; bottom: 36px; right: var(--hud-gap);
+  width: min(364px, calc(100% - 76px)); z-index: 8; border-radius: 12px;
+  display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 12px 32px #071b1740;
+}
+.city-app .right-information-dock[hidden], .city-app .information-dock-content > [hidden] { display: none; }
+.information-dock-tabs { display: flex; flex-shrink: 0; gap: 4px; padding: 10px; border-bottom: 1px solid #ffffff20; flex-wrap: wrap; }
+.information-dock-tabs button { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; padding: 8px; border-color: transparent; background: transparent; }
+.information-dock-tabs button[aria-pressed=true] { background: #ace5c71c; border-color: #ace5c750; color: #ceefdd; }
+.information-dock-tabs .information-dock-help { margin-left: auto; }
+.information-dock-content { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #7ba18b66 transparent; }
+.city-app .right-information-dock .selection-panel,
+.city-app .right-information-dock .grid-operations,
+.city-app .right-information-dock .connection-panel,
+.city-app .right-information-dock .lighting-panel {
+  position: static; width: 100%; max-width: none; max-height: none; overflow: visible;
+  padding: 16px; border: 0; border-radius: 0; background: transparent; box-shadow: none;
+  font-size: 12px;
+}
+.city-app .right-information-dock .service-badge-legend { position: static; width: 100%; max-width: none; max-height: none; padding: 16px; border: 0; background: transparent; box-shadow: none; overflow: visible; }
+.city-app .right-information-dock .selection-panel h2 { font-size: 19px; margin: 10px 0 8px; overflow-wrap: anywhere; }
+.city-app .right-information-dock .selection-panel p { font-size: 12px; line-height: 1.65; }
+.city-app .right-information-dock .selection-panel > button { font-size: 12px; min-height: 34px; }
+.city-app .right-information-dock .panel-label, .city-app .right-information-dock .inspector-details summary { font-size: 12px; }
+.city-app .right-information-dock .facility-properties label { font-size: 12px; margin: 12px 0; }
+.city-app .right-information-dock .facility-properties small { font-size: 11px; line-height: 1.7; }
+.city-app .facility-input-help { padding: 8px 10px; background: #ffffff06; border-radius: 8px; }
+.city-app .facility-input-help summary { padding: 3px 0; }
+.city-app .facility-input-help small + small { margin-top: 8px; }
+.city-app .right-information-dock .facility-properties input, .city-app .right-information-dock .facility-properties select { min-height: 36px; }
+.city-app .right-information-dock .service-status > div { padding: 10px; border: 1px solid #ffffff18; border-radius: 8px; margin: 8px 0; font-size: 12px; }
+.city-app .right-information-dock .service-status > div small { font-size: 11px; line-height: 1.7; overflow-wrap: anywhere; }
+.city-app .right-information-dock .service-status > small { display: block; font-size: 11px; color: #bacec5; line-height: 1.7; }
+.city-app .service-status > div[data-status=shortage] b { color: #ffd476; }
+.city-app .service-status > div[data-status=unset] b { color: #c4cdd6; }
+.city-app .service-quantity { width: 100%; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin: 8px 0 0; }
+.city-app .service-quantity div { background: #ffffff08; border-radius: 6px; padding: 8px 5px; }
+.city-app .service-quantity dt { font-size: 10px; color: #bacec5; }
+.city-app .service-quantity dd { margin: 5px 0 0; font-size: 11px; overflow-wrap: anywhere; }
+.city-app.has-information-dock .bottom-workspace { right: 388px; }
+.city-app.has-information-dock .build-dock { width: min(960px, 100%); }
+.service-badge-service { border-bottom: 1px solid #ffffff16; padding-bottom: 9px; margin-bottom: 9px; }
+.service-badge-service.power svg { color: #ffe08a; }
+.service-badge-service.water svg { color: #87deed; }
+.service-badge-states { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+.service-badge-states > span { display: flex; align-items: center; justify-content: space-between; padding: 6px; background: #ffffff08; border-radius: 5px; font-size: 11px; }
+.service-badge-legend { max-height: calc(100% - 180px); overflow-y: auto; }
+.service-badge-legend details { margin: 8px 0; font-size: 11px; line-height: 1.7; }
+.service-badge-legend summary { cursor: pointer; }
+.city-app .service-badge-legend p { line-height: 1.7; font-size: 11px; }
+.city-app .service-badge-legend label { font-size: 11px; }
+@media (max-width: 1000px) {
+  .city-app.has-information-dock .bottom-workspace { right: var(--hud-gap); }
+  .city-app .right-information-dock { bottom: calc(36px + var(--dock-space)); }
+}
+@media (max-width: 700px) { .city-app .right-information-dock { top: 110px; bottom: 36px; } }
+@media (max-height: 480px) { .city-app .right-information-dock { top: 95px; bottom: 30px; } }

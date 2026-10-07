@@ -1,4 +1,5 @@
 import { STREET_PROPS } from './streetscape.js';
+import { EXPANSION_ASSETS } from './expansionAssets.js';
 
 export const PRESETS = [
   { id: 'river', name: '강변 도시', subtitle: '강을 따라 자라는 도시', tag: 'RIVER VALLEY', color: '#7dbba7' },
@@ -10,7 +11,10 @@ export const PRESETS = [
 export const CATEGORIES = [
   { id: 'plot', name: '부지 조성', icon: 'plot', color: '#d9cca0' },
   { id: 'residential', name: '주거시설', icon: 'home', color: '#83bd96' },
-  { id: 'commercial', name: '상업 · 산업', icon: 'building', color: '#77b7d6' },
+  { id: 'commercial', name: '상업·업무', icon: 'building', color: '#77b7d6' },
+  { id: 'industrial', name: '산업시설', icon: 'factory', color: '#a4b6ba' },
+  { id: 'transport', name: '교통·주차', icon: 'road', color: '#9fbfb1' },
+  { id: 'environment', name: '환경·자원', icon: 'tree', color: '#a4c2ad' },
   { id: 'landmark', name: '공공시설', icon: 'civic', color: '#c5acd7' },
   { id: 'power', name: '전력 시설', icon: 'power', color: '#e6c77e' },
   { id: 'water', name: '상하수도 시설', icon: 'water', color: '#83c9d5' },
@@ -21,6 +25,7 @@ export const CATEGORIES = [
 ];
 
 export const ASSETS = [
+  ...EXPANSION_ASSETS,
   ...STREET_PROPS,
   { id: 'nuclear-plant', category: 'power', name: '원자력 발전소', detail: '발전 · 격납건물과 냉각탑', width: 28, depth: 24, height: 19, color: '#d3dcd3', people: 0 },
   { id: 'smart-factory', category: 'commercial', name: '스마트 공장', detail: '산업 수요 · 생산동과 옥상 태양광', width: 20, depth: 16, height: 8, color: '#a4b6ba', people: 0 },
@@ -39,6 +44,9 @@ export const ASSETS = [
   { id: 'power-plant', category: 'power', name: '일반 발전소', detail: '발전 · 터빈동과 배기탑', width: 12, depth: 10, height: 8, color: '#b6b9aa', people: 0 },
   { id: 'solar-farm', category: 'power', name: '태양광 발전소', detail: '재생에너지 · 태양광 패널', width: 10, depth: 8, height: 2, color: '#426a7b', people: 0 },
   { id: 'ess', category: 'power', name: '에너지 저장장치 (ESS)', detail: '에너지 저장 · 배터리 모듈', width: 8, depth: 6, height: 3, color: '#c7d5c8', people: 0 },
+  { id: 'fast-charger', category: 'power', powerConsumer: true, name: '급속 충전소', detail: '전력 소비 · 지붕과 2면 충전 구역', width: 10, depth: 8, height: 4, color: '#78c6b5', people: 0 },
+  { id: 'slow-charger', category: 'power', powerConsumer: true, name: '완속 충전기', detail: '전력 소비 · 주차면과 충전 기둥', width: 4, depth: 6, height: 2, color: '#78c6b5', people: 0 },
+  { id: 'solar-carport', category: 'power', name: '태양광 주차장', detail: '재생에너지 · 주차장 지붕 태양광 발전', width: 12, depth: 10, height: 4, color: '#426a7b', people: 0 },
   { id: 'substation', category: 'power', name: '변전소', detail: '송전 · 변압기와 철구조물', width: 10, depth: 8, height: 7, color: '#9caeaf', people: 0 },
   { id: 'distribution', category: 'power', name: '배전 설비', detail: '배전 · 지역 전력 공급', width: 6, depth: 5, height: 4, color: '#b7c5b6', people: 0 },
   { id: 'wind-turbine', category: 'power', name: '풍력 발전기', detail: '재생에너지 · 회전 날개와 타워', width: 10, depth: 10, height: 18, color: '#dce5df', people: 0 },

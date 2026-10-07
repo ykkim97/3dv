@@ -1,0 +1,10 @@
+.city-app .life-panel { width: min(460px, calc(100vw - 32px)); }
+.life-panel fieldset { padding: 0; margin: 12px 0; border: 0; display: grid; gap: 7px; }
+.life-panel fieldset:disabled { opacity: .45; }
+.life-panel .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.life-master, .life-option { display: flex; align-items: center; gap: 12px; padding: 12px; border: 1px solid #a5c2d21f; border-radius: 9px; background: #a5c2d208; }
+.life-master { color: #9de0d1; font-weight: 650; }
+.life-option b { display: block; font-size: 12px; margin-bottom: 4px; }
+.city-app .life-option small { display: block; font-size: 11px; line-height: 1.5; margin: 0; }
+.life-panel input { accent-color: #81d5bd; flex: 0 0 auto; }
+.city-app .life-panel .life-help { display: block; margin-top: 12px; line-height: 1.7; color: #9cadba; }

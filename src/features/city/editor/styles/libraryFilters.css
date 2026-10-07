@@ -1,0 +1,7 @@
+.library-filters { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin:0 0 10px; }
+.city-app .library-filters button { padding:5px 10px; border-radius:14px; font-size:11px; background:transparent; color:var(--city-muted); border:1px solid #ffffff12; }
+.city-app .library-filters button[aria-pressed="true"] { color:var(--mint); background:#78d9c514; border-color:#78d9c545; }
+.library-filters button small { margin-left:5px; opacity:.65; }
+.library-result-count { margin-left:auto; font-size:10px; color:var(--city-muted); }
+.city-app .category-tabs { overflow-x:auto; }
+.city-app .category-tabs>button { flex-shrink:0; white-space:nowrap; }

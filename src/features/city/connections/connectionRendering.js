@@ -42,6 +42,24 @@ export function connectionIdFromPick(hit) {
 }
 
 export const connectionRendering = {
+  clearConnectionWaypoints() { this.waypointMarkers?.forEach(mesh => mesh.dispose()); this.waypointMarkers = []; this.waypointConnectionId = null; },
+  showConnectionWaypoints(id, activeIndex, city = this.city) {
+    const line = city.connections?.find(c => c.id === id);
+    if (!line) { this.clearConnectionWaypoints(); return; }
+    const points = line.waypoints || [];
+    if (this.waypointConnectionId !== id || this.waypointMarkers?.length !== points.length) this.clearConnectionWaypoints();
+    this.waypointConnectionId = id;
+    const height = Math.max(...connectionPath(city, line).map(p => p.y));
+    this.waypointMarkers = points.map((point, i) => {
+      const mesh = this.waypointMarkers?.[i] || MeshBuilder.CreateSphere(`connection-waypoint-${i}`, { diameter: 1, segments: 8 }, this.scene);
+      mesh.scaling.setAll(Math.max(1.5, line.radius * 4));
+      mesh.position.set(point.x, height, point.z); mesh.isPickable = true;
+      mesh.metadata = { waypointConnectionId: id, waypointIndex: i };
+      mesh.material = this.material(i === activeIndex ? 'waypoint-active' : 'waypoint', i === activeIndex ? '#ffe08a' : '#75f3bd');
+      mesh.renderOverlay = true; mesh.overlayColor = Color3.FromHexString('#75f3bd'); mesh.overlayAlpha = 0.4;
+      return mesh;
+    });
+  },
   setConnectionPickHandler(handler) { this.onConnectionPick = handler; },
   updateConnections(terrainChanged = false) {
     this.flowNodes ||= new Map(); this.flowBatches ||= new Map(); this.flowTime ||= 0;
@@ -54,14 +72,18 @@ export const connectionRendering = {
       const signature = JSON.stringify([connection, endpointGeometry(from), endpointGeometry(to)]);
       const previous = this.flowNodes.get(connection.id);
       if (!terrainChanged && previous?.signature === signature) { keep.add(connection.id); continue; }
-      const points = connectionPath(this.city, connection, objects).map(p => new Vector3(p.x, p.y, p.z));
-      if (points.length < 2 || Vector3.Distance(points[0], points.at(-1)) < 0.01) continue;
-      const tube = MeshBuilder.CreateTube('flow-geometry', { path: points, radius: connection.radius, tessellation: 8, cap: 3 }, this.scene);
-      const geometry = VertexData.ExtractFromMesh(tube); tube.dispose();
-      let length = 0;
-      for (let i = 1; i < points.length; i++) length += Vector3.Distance(points[i - 1], points[i]);
+      const geometrySignature = JSON.stringify([connection.radius, connection.clearance, connection.route, connection.waypoints, endpointGeometry(from), endpointGeometry(to)]);
+      let geometry = previous?.geometry, length = previous?.length;
+      if (terrainChanged || !geometry || previous.geometrySignature !== geometrySignature) {
+        const points = connectionPath(this.city, connection, objects).map(p => new Vector3(p.x, p.y, p.z));
+        if (points.length < 2 || Vector3.Distance(points[0], points.at(-1)) < 0.01) continue;
+        const tube = MeshBuilder.CreateTube('flow-geometry', { path: points, radius: connection.radius, tessellation: 8, cap: 3 }, this.scene);
+        geometry = VertexData.ExtractFromMesh(tube); tube.dispose();
+        length = 0;
+        for (let i = 1; i < points.length; i++) length += Vector3.Distance(points[i - 1], points[i]);
+      }
       const elapsed = previous?.elapsed || 0, clock = this;
-      const node = { geometry, signature, connection: { ...connection }, length, phase: elapsed, startTime: this.flowTime,
+      const node = { geometry, geometrySignature, signature, connection: connection.enabled === false ? { ...connection, color: '#778a86', animated: false, speed: 0 } : { ...connection }, length, phase: elapsed, startTime: this.flowTime,
         get elapsed() { return this.phase + (this.connection.animated ? clock.flowTime - this.startTime : 0); } };
       this.flowNodes.set(connection.id, node); keep.add(connection.id);
     }
@@ -76,7 +98,6 @@ export const connectionRendering = {
     for (let i = 0; i < batchCount; i++) {
       const members = nodes.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE), previous = this.flowBatches.get(i);
       if (previous && members.length === previous.members.length && members.every((node, j) => node === previous.members[j])) continue;
-      previous?.mesh.dispose();
       const data = new VertexData(), colors = [], params = [], phases = [], ranges = [];
       data.positions = []; data.normals = []; data.uvs = []; data.indices = [];
       for (const node of members) {
@@ -92,8 +113,23 @@ export const connectionRendering = {
           phases.push(connection.animated ? 1 : 0, node.phase - (connection.animated ? node.startTime : 0));
         }
       }
-      const mesh = new Mesh(`flow-batch-${i}`, this.scene); data.applyToMesh(mesh);
-      mesh.setVerticesData('flowColor', colors, false, 3); mesh.setVerticesData('flowParams', params, false, 4); mesh.setVerticesData('flowPhase', phases, false, 2);
+      const mesh = previous?.mesh || new Mesh(`flow-batch-${i}`, this.scene);
+      const indices = mesh.getIndices();
+      const sameTopology = mesh.getTotalVertices() === data.positions.length / 3 && indices?.length === data.indices.length && indices.every((index, j) => index === data.indices[j]);
+      if (sameTopology) {
+        // Preserve vertex buffers, submeshes and their ready draw wrappers.
+        // Destroying/recreating them while dragging can skip visible frames.
+        mesh.updateVerticesData('position', data.positions, true);
+        mesh.updateVerticesData('normal', data.normals);
+        mesh.updateVerticesData('uv', data.uvs);
+        mesh.updateVerticesData('flowColor', colors);
+        mesh.updateVerticesData('flowParams', params);
+        mesh.updateVerticesData('flowPhase', phases);
+      } else {
+        data.applyToMesh(mesh, true);
+        mesh.setVerticesData('flowColor', colors, true, 3); mesh.setVerticesData('flowParams', params, true, 4); mesh.setVerticesData('flowPhase', phases, true, 2);
+      }
+      mesh.refreshBoundingInfo();
       mesh.material = this.flowMaterial; mesh.metadata = { connectionRanges: ranges }; mesh.freezeWorldMatrix();
       for (const node of members) { node.mesh = mesh; node.material = this.flowMaterial; }
       this.flowBatches.set(i, { mesh, members });

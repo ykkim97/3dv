@@ -16,7 +16,7 @@ export const FACILITY_NUMBERS = {
   capacityM3h: { label: '정격 유량', unit: 'm³/h', max: 1e9 },
 };
 const TEXT_LIMITS = { name: 60, code: 40, notes: 500 };
-const GENERATORS = new Set(['nuclear-plant', 'power-plant', 'solar-farm', 'wind-turbine', 'smart-factory']);
+const GENERATORS = new Set(['nuclear-plant', 'power-plant', 'solar-farm', 'solar-carport', 'wind-turbine', 'smart-factory']);
 
 export function facilityName(object) {
   return object?.properties?.name?.trim() || assetById[object?.asset]?.name || '시설';
@@ -27,6 +27,8 @@ export function facilityStatus(object) {
 export function facilityNumberFields(object) {
   const category = assetById[object.asset]?.category;
   const keys = [];
+  if (assetById[object.asset]?.powerConsumer) return ['demandKW'];
+  if (object.asset === 'solar-carport') return ['generationKW', 'capacityKW'];
   if (GENERATORS.has(object.asset)) keys.push('generationKW');
   if (['residential', 'commercial', 'landmark', 'water', 'power'].includes(category)) keys.push('demandKW');
   if (category === 'power' || object.asset === 'smart-factory') keys.push('capacityKW');

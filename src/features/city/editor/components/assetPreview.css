@@ -1,0 +1,5 @@
+.city-app .asset-preview.low-poly-preview { display: block; width: 124px; height: 72px; margin: -4px auto 0; transform: none; overflow: visible; }
+.city-app .asset-card.selected .low-poly-preview { filter: drop-shadow(0 3px 5px #75deca30); }
+.city-app .preset-art .asset-preview.low-poly-preview { width: 170px; height: 108px; margin: 0 auto; display: block; }
+@media (max-height: 650px) { .city-app .asset-preview.low-poly-preview { height: 57px; width: 108px; } }
+@media (max-height: 480px) { .city-app .asset-preview.low-poly-preview { display: none; } }
