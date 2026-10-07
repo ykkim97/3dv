@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import CityEditor from '../editor/CityEditor.jsx';
 import { createCity } from '../core/cityState.js';
-import { validateCity } from '../core/cityValidation.js';
 import { createSceneProject, removePage, validateSceneProject } from './projectModel.js';
 import { portalAnchor } from './portalModel.js';
 import { createSceneProjectStore } from './sceneProjectStore.js';
 import { saveSceneProjectFile } from './projectFiles.js';
 import PageLibrary from './PageLibrary.jsx';
+import { readSceneFile } from './importSceneFile.js';
 import './pages.css';
 
 export default function ProjectEditor() {
@@ -118,17 +118,19 @@ export default function ProjectEditor() {
       setEnabled(true);
     });
   };
+  const importProject = value => {
+    const next = validateSceneProject(value);
+    sessions.current.clear(); setRecovery(null); transition(next, next.activePageId, []);
+  };
   const importFile = async event => {
     const file = event.target.files?.[0]; event.target.value = '';
     if (!file) return;
     try {
-      if (file.size > 64 * 1024 * 1024) throw new Error('64 MB 이하의 JSON 파일을 선택하세요.');
-      const value = JSON.parse(await file.text());
-      if (value.type === 'lumatrix-pages') {
-        const next = validateSceneProject(value); sessions.current.clear(); setRecovery(null); transition(next, next.activePageId, []);
+      const result = await readSceneFile(file);
+      if (result.kind === 'project') {
+        importProject(result.value);
       } else {
-        const city = validateCity(value);
-        if (city.portals?.length) throw new Error('이동 포인트가 포함된 도시는 프로젝트 파일로 불러오세요.');
+        const city = result.value;
         const next = capture(), page = { id: crypto.randomUUID(), name: city.name, type: '3d', city };
         if (next.pages.length >= 30) throw new Error('페이지는 최대 30개까지 만들 수 있습니다.');
         setProject({ ...next, pages: [...next.pages, page] }); setEnabled(true);
@@ -150,7 +152,7 @@ export default function ProjectEditor() {
     {active.type === '3d' && <><button onClick={startPoint}>＋ 이동 포인트</button><button aria-pressed={viewing} onClick={() => { editor.current?.cancelPlacement(); setViewing(v => !v); }}>{viewing ? '이동 모드' : '포인트 편집'}</button></>}
   </div>;
   return <>
-    {active.type === '3d' ? <CityEditor key={`${active.id}:${revision}`} pageSession={enabled ? session || { city: active.city, camera: active.camera } : undefined} registerEditor={register} onCityChange={onCityChange} onProjectSave={saveFile} onProjectManage={openManager} projectSaveStatus={saveStatus} onPortalSelect={pickPortal} portalPages={project.pages} portalViewing={viewing} onSceneReady={sceneReady} onSceneLoadError={sceneLoadError} interactionBlocked={!!loading || manager || !!draft || !!recovery} pageMenu={menu} /> : <main className="dashboard-placeholder">{menu}<article><span>2D PAGE</span><h1>{active.name}</h1><p>대시보드 편집기는 준비 중입니다. 이 페이지는 프로젝트에 저장되며 이동 포인트로 방문할 수 있습니다.</p><button onClick={back} disabled={!backStack.length}>이전 화면으로 돌아가기</button><button onClick={openManager}>다른 페이지 열기</button></article></main>}
+    {active.type === '3d' ? <CityEditor key={`${active.id}:${revision}`} pageSession={enabled ? session || { city: active.city, camera: active.camera } : undefined} registerEditor={register} onCityChange={onCityChange} onProjectSave={saveFile} onProjectManage={openManager} onProjectImport={importProject} projectSaveStatus={saveStatus} onPortalSelect={pickPortal} portalPages={project.pages} portalViewing={viewing} onSceneReady={sceneReady} onSceneLoadError={sceneLoadError} interactionBlocked={!!loading || manager || !!draft || !!recovery} pageMenu={menu} /> : <main className="dashboard-placeholder">{menu}<article><span>2D PAGE</span><h1>{active.name}</h1><p>대시보드 편집기는 준비 중입니다. 이 페이지는 프로젝트에 저장되며 이동 포인트로 방문할 수 있습니다.</p><button onClick={back} disabled={!backStack.length}>이전 화면으로 돌아가기</button><button onClick={openManager}>다른 페이지 열기</button></article></main>}
     <input ref={fileInput} hidden type="file" accept=".json" onChange={importFile} />
     {loading && <div className={`scene-loading-cover ${loading.phase === 'revealing' ? 'is-revealing' : ''}`} aria-busy={!loading.error} onTransitionEnd={event => { if (event.target === event.currentTarget && event.propertyName === 'opacity') setLoading(current => current?.phase === 'revealing' ? null : current); }}><section role={loading.error ? 'alert' : 'status'} aria-live="polite" className="scene-loading-card">
       {!loading.error && <span className="scene-loading-spinner" aria-hidden="true" />}

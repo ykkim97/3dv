@@ -8,7 +8,7 @@ export default function EditorMenuBar({ openMenu, onOpenMenu, cityName, onMap, o
     <span className="editor-menu-logo" aria-hidden="true"><Icon name="building" size={16} /></span>
     <HeaderMenu id="file" label="파일" {...menu}>
       <button onClick={run(onMap)}>새 도시 · 지도 설정</button>
-      <button onClick={run(onImport)}>도시 파일 열기</button>
+      <button onClick={run(onImport)}>도시·프로젝트 파일 열기</button>
       <button onClick={run(onSave)}>도시 저장 <kbd>Ctrl + S</kbd></button>
       <button onClick={run(onExport)}>도시 파일 내보내기</button>
       <span className="menu-section-label menu-divider">자동 저장</span>

@@ -1,0 +1,160 @@
+{
+  "source": "Smart Grid Main Page.json",
+  "sourceSha256": "a9aa6baf2f5327d819f369755416dfa1f2d53d9edd72df91269c8eb4593714aa",
+  "checks": [
+    "All city and project schemas valid",
+    "Main objects, terrain and connections unchanged",
+    "No facility footprint overlaps in sub-scenes",
+    "All public and commercial consumers have power and water paths",
+    "Charger power paths valid",
+    "Sub-scene power parameters complete with no shortage",
+    "All portal targets and building anchors valid",
+    "Source file unchanged"
+  ],
+  "project": "Smart_Grid_Connected_Demo.project.json",
+  "pages": [
+    {
+      "id": "demo-main",
+      "name": "Electric Smart Grid · 리버 에너지 시티",
+      "file": "00_Smart_Grid_Main.city.json",
+      "objects": 726,
+      "plots": 49,
+      "roads": 73,
+      "connections": 208,
+      "portals": [
+        {
+          "name": "재생에너지 캠퍼스로 이동",
+          "targetPageId": "demo-renewables",
+          "position": {
+            "x": -184,
+            "y": 22.1,
+            "z": 176
+          }
+        },
+        {
+          "name": "발전·관제 단지로 이동",
+          "targetPageId": "demo-control",
+          "position": {
+            "x": -204,
+            "y": 23.1,
+            "z": -198
+          }
+        },
+        {
+          "name": "강변 물순환 센터로 이동",
+          "targetPageId": "demo-water",
+          "position": {
+            "x": -122,
+            "y": 9.1,
+            "z": -148
+          }
+        }
+      ]
+    },
+    {
+      "id": "demo-renewables",
+      "name": "바람과 햇빛 · 재생에너지 캠퍼스",
+      "file": "01_Renewable_Energy_Campus.city.json",
+      "objects": 96,
+      "plots": 4,
+      "roads": 10,
+      "connections": 32,
+      "supply": {
+        "consumers": 3,
+        "power": 3,
+        "water": 3,
+        "both": 3
+      },
+      "portals": [
+        {
+          "name": "메인 스마트그리드 도시로 돌아가기",
+          "targetPageId": "demo-main",
+          "position": {
+            "x": 24,
+            "y": 11.099999998047373,
+            "z": -58
+          }
+        },
+        {
+          "name": "발전·관제 단지 둘러보기",
+          "targetPageId": "demo-control",
+          "position": {
+            "x": -64,
+            "y": 33.1,
+            "z": -58
+          }
+        }
+      ]
+    },
+    {
+      "id": "demo-control",
+      "name": "안정적인 전력 · 발전·관제 단지",
+      "file": "02_Power_Control_Campus.city.json",
+      "objects": 84,
+      "plots": 4,
+      "roads": 10,
+      "connections": 21,
+      "supply": {
+        "consumers": 5,
+        "power": 5,
+        "water": 5,
+        "both": 5
+      },
+      "portals": [
+        {
+          "name": "메인 스마트그리드 도시로 돌아가기",
+          "targetPageId": "demo-main",
+          "position": {
+            "x": -64,
+            "y": 11.100000000000001,
+            "z": -60
+          }
+        },
+        {
+          "name": "강변 물순환 센터 둘러보기",
+          "targetPageId": "demo-water",
+          "position": {
+            "x": -62,
+            "y": 33.1,
+            "z": -36
+          }
+        }
+      ]
+    },
+    {
+      "id": "demo-water",
+      "name": "도시의 물길 · 강변 물순환 센터",
+      "file": "03_River_Water_Campus.city.json",
+      "objects": 74,
+      "plots": 4,
+      "roads": 17,
+      "connections": 24,
+      "supply": {
+        "consumers": 3,
+        "power": 3,
+        "water": 3,
+        "both": 3
+      },
+      "portals": [
+        {
+          "name": "메인 스마트그리드 도시로 돌아가기",
+          "targetPageId": "demo-main",
+          "position": {
+            "x": 42,
+            "y": 11.100000000000001,
+            "z": -34
+          }
+        },
+        {
+          "name": "재생에너지 캠퍼스 둘러보기",
+          "targetPageId": "demo-renewables",
+          "position": {
+            "x": -68,
+            "y": 33.1,
+            "z": -62
+          }
+        }
+      ]
+    }
+  ]
+}

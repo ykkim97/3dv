@@ -19,6 +19,7 @@ import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRe
 import { cleanPortals } from '../pages/portalModel.js';
 import { waitForRenderedScene } from '../pages/sceneReadiness.js';
 import { capturePageThumbnail } from '../pages/pageThumbnail.js';
+import { readSceneFile } from '../pages/importSceneFile.js';
 import { CityEngine } from '../rendering/CityEngine.js';
 import { ASSETS, assetById, BRUSHES, CATEGORIES, PRESETS, ROAD_TYPES, PLOT_TYPES } from '../presets/catalog.js';
 import { MAP_SIZES, mapDimensions } from '../core/mapDimensions.js';
@@ -70,7 +71,7 @@ function initialCity() {
   return createCity('river');
 }
 
-export default function CityEditor({ pageSession, onCityChange, registerEditor, onProjectSave, onProjectManage, projectSaveStatus, pageMenu, onPortalSelect, portalPages = [], portalViewing = false, onSceneReady, onSceneLoadError, interactionBlocked = false }) {
+export default function CityEditor({ pageSession, onCityChange, registerEditor, onProjectSave, onProjectManage, onProjectImport, projectSaveStatus, pageMenu, onPortalSelect, portalPages = [], portalViewing = false, onSceneReady, onSceneLoadError, interactionBlocked = false }) {
   const [history, setHistory] = useState(() => pageSession?.history || ({ past: [], current: pageSession?.city || initialCity(), future: [] }));
   const city = history.current;
   const [category, setCategory] = useState('plot');
@@ -311,7 +312,15 @@ export default function CityEditor({ pageSession, onCityChange, registerEditor, 
   };
   const importCity = async event => {
     const file = event.target.files?.[0]; event.target.value = ''; if (!file) return;
-    try { if (file.size > 8_000_000) throw new Error('8MB 이하의 도시 파일을 선택해 주세요.'); const imported = validateCity(JSON.parse(await file.text())); if (imported.portals?.length) throw new Error('이동 포인트는 페이지 메뉴에서 전체 프로젝트 파일로 불러오세요.'); autosave.newProject(); commit(imported); setTrayOpen(imported.objects.length === 0); setHeaderMenu(null); setConnectionsOpen(false); setLightingOpen(false); setSelected(null); setMode('select'); setNotice('도시 파일을 불러왔습니다.'); }
+    try {
+      const result = await readSceneFile(file);
+      if (result.kind === 'project') {
+        if (!onProjectImport) throw new Error('페이지 메뉴에서 프로젝트 파일을 불러오세요.');
+        onProjectImport(result.value); setHeaderMenu(null); return;
+      }
+      const imported = result.value;
+      autosave.newProject(); commit(imported); setTrayOpen(imported.objects.length === 0); setHeaderMenu(null); setConnectionsOpen(false); setLightingOpen(false); setSelected(null); setMode('select'); setNotice('도시 파일을 불러왔습니다.');
+    }
     catch (err) { setNotice(`불러오기 실패: ${err.message}`); }
   };
   const exportImage = async () => {
