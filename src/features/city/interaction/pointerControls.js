@@ -42,6 +42,7 @@ export const pointerControls = {
     if (this.boxSelection) { this.updateBoxSelection(event); return; }
     this.lastPointer = { clientX: event.clientX, clientY: event.clientY };
     if (!this.city) return;
+    this.updatePortalHover?.(event);
     if (this.waypointDrag) { this.updateWaypointPointer(event); return; }
     if (this.roadEdit) { const terrain = this.pick(event); if (terrain.hit) this.updateRoadEdit(terrain.pickedPoint, event); return; }
     if (this.plotEdit) { const terrain = this.pick(event); if (terrain.hit) this.updatePlotEdit(terrain.pickedPoint, event); return; }
@@ -145,10 +146,20 @@ export const pointerControls = {
     this.handlers = {
       contextmenu: e => e.preventDefault(),
       pointermove: e => this.move(e),
-      pointerleave: () => { this.roadSnapMarker?.setEnabled(false); this.roadPreview?.setEnabled(false); this.lastPointer = null; this.plotAnchor?.setEnabled(false); this.alignmentGuide?.setEnabled(false); this.ring.setEnabled(false); this.brushSpokes.setEnabled(false); this.onBrushMove?.(null); this.preview?.setEnabled(false); this.targetCell?.setEnabled(false); this.targetBorder?.setEnabled(false); },
+      pointerleave: () => { this.clearPortalHover(); this.roadSnapMarker?.setEnabled(false); this.roadPreview?.setEnabled(false); this.lastPointer = null; this.plotAnchor?.setEnabled(false); this.alignmentGuide?.setEnabled(false); this.ring.setEnabled(false); this.brushSpokes.setEnabled(false); this.onBrushMove?.(null); this.preview?.setEnabled(false); this.targetCell?.setEnabled(false); this.targetBorder?.setEnabled(false); },
       pointerdown: e => {
         if (e.button !== 0 || !this.city) return;
         const { mode } = this.options;
+        if (mode === 'portal-place') {
+          const rect = this.canvas.getBoundingClientRect();
+          const hit = this.scene.pick(e.clientX - rect.left, e.clientY - rect.top, mesh => mesh === this.terrain || !!mesh.metadata?.objectId || !!mesh.metadata?.plotId);
+          if (hit.hit) this.onPortalPlace?.(hit.pickedPoint, hit.pickedMesh?.metadata?.objectId);
+          return;
+        }
+        if (mode === 'select' && !e.shiftKey && !this.options.boxSelect) {
+          const hit = this.pick(e, false);
+          if (hit.pickedMesh?.metadata?.portalId) { this.onPortalSelect?.(hit.pickedMesh.metadata.portalId); return; }
+        }
         if ((mode === 'select' || mode === 'waypoint') && !e.shiftKey && !this.options.boxSelect && this.beginWaypointPointer?.(e)) return;
         if (mode === 'waypoint') {
           this.onMessage('편집할 연결선을 먼저 선택하세요.');

@@ -3,7 +3,7 @@ import { Autosave } from './autosave.js';
 import { createProjectStore } from './projectStore.js';
 import { validateCity } from '../core/cityValidation.js';
 
-export function useAutosave(city, onRestore) {
+export function useAutosave(city, onRestore, enabled = true) {
   const [currentId, setCurrentId] = useState(() => crypto.randomUUID());
   const store = useRef(null), controller = useRef(null), projectId = useRef(currentId);
   const [status, setStatus] = useState({ state: 'loading' });
@@ -16,6 +16,7 @@ export function useAutosave(city, onRestore) {
     catch (error) { setStatus({ state: 'error', message: error.message }); return []; }
   }, []);
   useEffect(() => {
+    if (!enabled) return;
     let active = true;
     store.current = createProjectStore();
     const instance = new Autosave(store.current, value => { if (active) setStatus(value); });
@@ -35,7 +36,7 @@ export function useAutosave(city, onRestore) {
       active = false; instance.flush().catch(() => {}); instance.dispose();
       document.removeEventListener('visibilitychange', hidden); window.removeEventListener('pagehide', flush); window.removeEventListener('beforeunload', leaving);
     };
-  }, []);
+  }, [enabled]);
   useEffect(() => { if (ready) controller.current?.schedule(city, projectId.current); }, [city, ready, currentId]);
   const restore = async (project, snapshot) => {
     try {
@@ -54,6 +55,6 @@ export function useAutosave(city, onRestore) {
     try { await store.current.remove(id); await refresh(); }
     catch (error) { setStatus({ state: 'error', message: error.message }); }
   };
-  return { status, projects, recovery, open, setOpen, restore, remove, showProjects, flush, newProject, currentId,
+  return { status, projects, recovery: enabled ? recovery : null, open: enabled && open, setOpen, restore, remove, showProjects, flush, newProject, currentId,
     continueWithoutRecovery: () => { setRecovery(null); setReady(true); } };
 }

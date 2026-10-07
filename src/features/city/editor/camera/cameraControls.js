@@ -50,6 +50,8 @@ export const cameraControls = {
     return { alpha: this.camera.alpha, beta: this.camera.beta, radius: this.camera.radius, target: { x: target.x, y: target.y, z: target.z }, screenOffset: { x: offset.x, y: offset.y } };
   },
   restoreCamera(view) {
+    this.camera.lowerRadiusLimit = Math.min(2, view.radius);
+    this.camera.upperRadiusLimit = Math.max(this.camera.upperRadiusLimit || 0, view.radius);
     this.camera.alpha = view.alpha; this.camera.beta = view.beta; this.camera.radius = view.radius;
     this.camera.setTarget(new Vector3(view.target.x, view.target.y, view.target.z), false, true, true);
     this.camera.targetScreenOffset.set(view.screenOffset?.x || 0, view.screenOffset?.y || 0);

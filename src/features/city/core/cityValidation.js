@@ -5,6 +5,7 @@ import { bridgeById } from '../presets/bridgePresets.js';
 import { validateConnections } from '../connections/connectionModel.js';
 import { validateFacilityProperties } from '../management/facilityProperties.js';
 import { LIFE_SETTING_KEYS } from '../simulation/lifeSettings.js';
+import { validatePortals } from '../pages/portalModel.js';
 
 export function validateCity(value) {
   if (value?.powerSupplyMode !== undefined && !['range', 'network'].includes(value.powerSupplyMode)) throw new Error('전력 공급 판정 방식이 올바르지 않습니다.');
@@ -39,5 +40,6 @@ export function validateCity(value) {
   if (value.cameraViews !== undefined && (!Array.isArray(value.cameraViews) || value.cameraViews.length > 30 || value.cameraViews.some(view => !view || typeof view.id !== 'string' || typeof view.name !== 'string' || view.name.length > 40 || !Number.isFinite(view.alpha) || !Number.isFinite(view.beta) || view.beta < 0 || view.beta > Math.PI / 2 || !Number.isFinite(view.radius) || view.radius < 2 || view.radius > cameraLimit || !view.target || [view.target.x, view.target.y, view.target.z].some(axis => !Number.isFinite(axis) || Math.abs(axis) > 10000) || view.screenOffset !== undefined && (!view.screenOffset || [view.screenOffset.x, view.screenOffset.y].some(axis => !Number.isFinite(axis) || Math.abs(axis) > 10000))) || new Set(value.cameraViews.map(view => view.id)).size !== value.cameraViews.length)) throw new Error('카메라 시점 데이터가 올바르지 않습니다.');
   if (new Set(all.map(o => o.id)).size !== all.length) throw new Error('중복된 시설 ID가 있습니다.');
   validateConnections(value);
+  validatePortals(value);
   return value;
 }

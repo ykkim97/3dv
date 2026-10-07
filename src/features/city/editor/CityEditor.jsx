@@ -15,7 +15,10 @@ import SurfacePicker from './components/SurfacePicker.jsx';
 import AssetPreview from './components/AssetPreview.jsx';
 import { filterLibrary, libraryGroups } from '../presets/libraryGroups.js';
 import './styles/libraryFilters.css';
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { cleanPortals } from '../pages/portalModel.js';
+import { waitForRenderedScene } from '../pages/sceneReadiness.js';
+import { capturePageThumbnail } from '../pages/pageThumbnail.js';
 import { CityEngine } from '../rendering/CityEngine.js';
 import { ASSETS, assetById, BRUSHES, CATEGORIES, PRESETS, ROAD_TYPES, PLOT_TYPES } from '../presets/catalog.js';
 import { MAP_SIZES, mapDimensions } from '../core/mapDimensions.js';
@@ -67,8 +70,8 @@ function initialCity() {
   return createCity('river');
 }
 
-export default function CityEditor() {
-  const [history, setHistory] = useState(() => ({ past: [], current: initialCity(), future: [] }));
+export default function CityEditor({ pageSession, onCityChange, registerEditor, onProjectSave, onProjectManage, projectSaveStatus, pageMenu, onPortalSelect, portalPages = [], portalViewing = false, onSceneReady, onSceneLoadError, interactionBlocked = false }) {
+  const [history, setHistory] = useState(() => pageSession?.history || ({ past: [], current: pageSession?.city || initialCity(), future: [] }));
   const city = history.current;
   const [category, setCategory] = useState('plot');
   const [mode, setMode] = useState('select');
@@ -128,6 +131,7 @@ export default function CityEditor() {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
   const canvas = useRef(null), engine = useRef(null), fileInput = useRef(null), brushLabel = useRef(null);
+  const portalPopup = useRef(null), portalPopupName = useRef(null), portalPopupTarget = useRef(null);
   const setSelected = useCallback((id, kind = null) => { setInformationTab('selection'); setSelection({ single: id, ids: id && kind !== 'water' ? [id] : [], kind }); }, []);
   const onSceneSelect = useCallback((id, additive = false, kind = null) => {
     setInformationTab('selection');
@@ -141,7 +145,7 @@ export default function CityEditor() {
   }, []);
   const commit = useCallback(next => { setHistory(h => {
     const current = typeof next === 'function' ? next(h.current) : next;
-    const normalized = cleanConnections(cleanDistricts(current));
+      const normalized = cleanPortals(cleanConnections(cleanDistricts(current)));
     return { past: [...h.past.slice(-24), h.current], current: normalized, future: [] };
   }); setSaved(false); }, []);
   const lockSelection = useCallback(locked => { commit(current => setLocked(current, selectedIds, locked)); setNotice(locked ? '선택한 대상을 잠갔습니다.' : '선택 잠금을 해제했습니다.'); }, [commit, selectedIds]);
@@ -164,14 +168,16 @@ export default function CityEditor() {
     setConnectionsOpen(false); setLightingOpen(false); setTrayOpen(restored.objects.length === 0);
     setSaved(false); setNotice('저장된 프로젝트를 복구했습니다.');
   }, [setSelected]);
-  const autosave = useAutosave(city, restoreProject);
+  const autosave = useAutosave(city, restoreProject, !pageSession);
+  const showProjects = pageSession ? onProjectManage : autosave.showProjects;
   const flushAutosave = autosave.flush;
   const save = useCallback(() => {
+    if (onProjectSave && pageSession) { onProjectSave(); return; }
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(city)); setSaved(true); setNotice('이 기기에 도시를 저장했습니다.'); }
     catch { setNotice('저장 공간이 부족합니다. 파일로 내보내기를 사용하세요.'); }
     flushAutosave().catch(() => {});
-  }, [city, flushAutosave]);
-  useEffect(() => {
+  }, [city, flushAutosave, onProjectSave, pageSession]);
+  useLayoutEffect(() => {
     let instance;
     try { instance = new CityEngine(canvas.current, next => { commit(next); setMode(current => current === 'move' ? 'select' : current); }, onSceneSelect, setNotice, position => {
       if (!brushLabel.current) return;
@@ -182,7 +188,52 @@ export default function CityEditor() {
     catch (err) { queueMicrotask(() => setError(`3D 화면을 시작하지 못했습니다. WebGL 설정을 확인해 주세요. ${err.message}`)); }
     return () => { instance?.dispose(); engine.current = null; };
   }, [commit, onSceneSelect]);
+  const restoredCamera = useRef(null);
   useEffect(() => { if (engine.current && engine.current.renderedCity !== city) engine.current.setCity(city, service); });
+  useEffect(() => {
+    if (engine.current && restoredCamera.current !== engine.current && pageSession?.camera) { engine.current.restoreCamera(pageSession.camera); restoredCamera.current = engine.current; }
+  }, [pageSession]);
+  useEffect(() => { onCityChange?.(city); }, [city, onCityChange]);
+  useLayoutEffect(() => {
+    registerEditor?.({
+      snapshot: () => ({ history, city, camera: engine.current?.cameraState() }),
+      thumbnail: () => capturePageThumbnail(canvas.current),
+      dispose: () => engine.current?.dispose(),
+      updateCity: commit,
+      resetHistory: current => setHistory({ past: [], current, future: [] }),
+      placePortal: callback => { if (engine.current) engine.current.onPortalPlace = (position, objectId) => { callback(position, objectId); setMode('select'); }; setMode('portal-place'); setNotice('지형이나 건물에서 이동 포인트를 둘 위치를 클릭하세요. Esc로 취소할 수 있습니다.'); },
+      cancelPlacement: () => setMode('select'),
+    });
+  }, [registerEditor, history, city, commit]);
+  useEffect(() => { if (engine.current) engine.current.onPortalSelect = onPortalSelect; }, [onPortalSelect]);
+  useEffect(() => {
+    const instance = engine.current;
+    if (!instance) return;
+    const popupElement = portalPopup.current;
+    instance.portalHoverEnabled = !interactionBlocked && mode === 'select';
+    instance.onPortalHover = info => {
+      const popup = portalPopup.current;
+      if (!popup) return;
+      const portal = info && city.portals?.find(p => p.id === info.id);
+      popup.hidden = !portal || !instance.portalHoverEnabled;
+      if (popup.hidden) return;
+      const target = portalPages.find(p => p.id === portal.targetPageId);
+      const destination = target ? `${target.type.toUpperCase()} · ${target.name}` : '목적지를 확인하세요';
+      if (portalPopupName.current.textContent !== portal.name) portalPopupName.current.textContent = portal.name;
+      if (portalPopupTarget.current.textContent !== destination) portalPopupTarget.current.textContent = destination;
+      const left = `${Math.max(130, Math.min(window.innerWidth - 130, info.x))}px`, top = `${Math.max(115, info.y)}px`;
+      if (popup.style.left !== left) popup.style.left = left;
+      if (popup.style.top !== top) popup.style.top = top;
+    };
+    if (!instance.portalHoverEnabled) instance.clearPortalHover();
+    return () => { instance.onPortalHover = null; if (popupElement) popupElement.hidden = true; };
+  }, [city.portals, portalPages, mode, interactionBlocked]);
+  useEffect(() => {
+    const instance = engine.current;
+    if (!instance || !onSceneReady) return;
+    return waitForRenderedScene(instance, onSceneReady);
+  }, [onSceneReady]);
+  useEffect(() => { if (error) onSceneLoadError?.(error); }, [error, onSceneLoadError]);
   useEffect(() => {
     engine.current?.setRenderQuality(renderQuality);
     try { localStorage.setItem('lumatrix-render-quality', JSON.stringify(renderQuality)); } catch { /* Quality still applies without persistent storage. */ }
@@ -214,6 +265,7 @@ export default function CityEditor() {
   }, [selected, selectedIds]);
   useEffect(() => {
     const keydown = event => {
+      if (interactionBlocked) return;
       if (helpOpen || performanceOpen || autosave.open || autosave.recovery) return;
       if (['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target.tagName) || event.target.isContentEditable) return;
       const key = event.key.toLowerCase();
@@ -226,7 +278,7 @@ export default function CityEditor() {
       if (key === 'delete') removeSelected();
     };
     window.addEventListener('keydown', keydown); return () => window.removeEventListener('keydown', keydown);
-  }, [undo, redo, save, removeSelected, setSelected, helpOpen, frameSelected, performanceOpen, autosave.open, autosave.recovery]);
+  }, [undo, redo, save, removeSelected, setSelected, helpOpen, frameSelected, performanceOpen, autosave.open, autosave.recovery, interactionBlocked]);
   const selectCategory = id => { engine.current?.cancelPlotDraft(); setMovingId(null); setCategory(id); setSubcategory('all'); setSearch(''); setTrayOpen(true); setMode(['terrain', 'road', 'plot'].includes(id) ? id : 'select'); };
   const rotateSelected = () => {
     const o = city.objects.find(item => item.id === selected);
@@ -259,7 +311,7 @@ export default function CityEditor() {
   };
   const importCity = async event => {
     const file = event.target.files?.[0]; event.target.value = ''; if (!file) return;
-    try { if (file.size > 8_000_000) throw new Error('8MB 이하의 도시 파일을 선택해 주세요.'); const imported = validateCity(JSON.parse(await file.text())); autosave.newProject(); commit(imported); setTrayOpen(imported.objects.length === 0); setHeaderMenu(null); setConnectionsOpen(false); setLightingOpen(false); setSelected(null); setMode('select'); setNotice('도시 파일을 불러왔습니다.'); }
+    try { if (file.size > 8_000_000) throw new Error('8MB 이하의 도시 파일을 선택해 주세요.'); const imported = validateCity(JSON.parse(await file.text())); if (imported.portals?.length) throw new Error('이동 포인트는 페이지 메뉴에서 전체 프로젝트 파일로 불러오세요.'); autosave.newProject(); commit(imported); setTrayOpen(imported.objects.length === 0); setHeaderMenu(null); setConnectionsOpen(false); setLightingOpen(false); setSelected(null); setMode('select'); setNotice('도시 파일을 불러왔습니다.'); }
     catch (err) { setNotice(`불러오기 실패: ${err.message}`); }
   };
   const exportImage = async () => {
@@ -341,13 +393,15 @@ export default function CityEditor() {
   const activeInformation = connectionsOpen ? 'connections' : lightingOpen ? 'lighting' : informationTab === 'status' && hasBadges ? 'status' : operationsOpen && (informationTab === 'operations' || !hasSelection) ? 'operations' : hasSelection ? 'selection' : 'status';
   const selectInformation = tab => { if (tab !== 'connections' && ['waypoint', 'connect'].includes(mode)) setMode('select'); setConnectionsOpen(tab === 'connections'); setLightingOpen(tab === 'lighting'); setInformationTab(tab); };
   return <main data-tool={mode} className={`city-app ${dockVisible ? 'has-information-dock' : ''} ${night ? 'is-night' : ''} ${infoVisible ? 'info-visible' : ''} ${trayOpen ? 'tray-expanded' : 'tray-collapsed'} ${minimapOpen ? 'map-open' : ''} ${city.objects.length ? 'has-city' : 'empty-city'}`}>
+    <div ref={portalPopup} className="portal-hover-popup" role="tooltip" hidden><strong ref={portalPopupName} /><span ref={portalPopupTarget} /><small>{portalViewing ? '클릭해서 이동' : '클릭해서 포인트 설정'}</small></div>
     <canvas ref={canvas} className="city-canvas" aria-label="도시 3D 편집 화면" /><div className="scene-vignette" />{(mode === 'build' || mode === 'plot' || mode === 'move') && <div className="scene-placement-dim" aria-hidden="true" />}<div ref={brushLabel} className="brush-radius-label" hidden />
     <RecoveryPanel autosave={autosave} />
     {performanceOpen && <PerformancePanel engine={engine} value={renderQuality} onChange={setRenderQuality} onClose={() => setPerformanceOpen(false)} />}
     {changes.length > 0 && <button className="city-change-summary glass" onClick={() => setDiagnosticsOpen(true)} aria-label="최근 편집 결과 자세히 보기"><span>최근 편집 결과</span>{changes.slice(0, 2).map(change => <small key={change.id} className={change.improved ? 'improved' : 'increased'}>{change.label} {change.before} → {change.value}{change.unit}</small>)}{changes.length > 2 && <small>변경 {changes.length}개 · 자세히 보기</small>}</button>}
-    <EditorMenuBar openMenu={headerMenu} onOpenMenu={setHeaderMenu} cityName={city.name} onMap={() => setPresetsOpen(true)} onImport={() => fileInput.current.click()} onSave={save} onExport={() => setExportOpen(true)} onProjects={autosave.showProjects} onUndo={undo} onRedo={redo} canUndo={!!history.past.length} canRedo={!!history.future.length} onFocus={frameSelected} canFocus={hasSelection} onHelp={() => setHelpOpen(true)}>
+    <EditorMenuBar openMenu={headerMenu} onOpenMenu={setHeaderMenu} cityName={city.name} onMap={() => setPresetsOpen(true)} onImport={() => fileInput.current.click()} onSave={save} onExport={() => setExportOpen(true)} onProjects={showProjects} onUndo={undo} onRedo={redo} canUndo={!!history.past.length} canRedo={!!history.future.length} onFocus={frameSelected} canFocus={hasSelection} onHelp={() => setHelpOpen(true)}>
+      {pageMenu}
       <HeaderMenu id="manage" label="도시 관리" textOnly openMenu={headerMenu} onOpen={setHeaderMenu}>
-        <button onClick={() => { setHeaderMenu(null); autosave.showProjects(); }}><Icon name="folder" size={16} /> 자동 저장 · 프로젝트 복구</button>
+        <button onClick={() => { setHeaderMenu(null); showProjects(); }}><Icon name="folder" size={16} /> 자동 저장 · 프로젝트 복구</button>
         <button onClick={() => { setHeaderMenu(null); selectInformation('operations'); setOperationsOpen(true); }}><Icon name="power" size={16} /> 운영 대시보드 · 고장 시나리오</button>
         <span className="menu-section-label">시설과 구역</span>
         <button onClick={() => { setHeaderMenu(null); selectInformation('connections'); setSelectedConnection(null); setMode('select'); }}><Icon name="connection" size={16} /> 시설 연결선</button>
@@ -393,7 +447,7 @@ export default function CityEditor() {
         <button aria-label="기본 시점으로 이동" title="기본 시점으로 이동" onClick={() => { setHeaderMenu(null); engine.current?.view('home'); }}><Icon name="home" size={17} /><span>전체 보기</span></button>
         <button aria-label="선택 대상에 화면 맞추기" title="선택 대상에 화면 맞추기 · F" disabled={!hasSelection} onClick={() => { setHeaderMenu(null); frameSelected(); }}><Icon name="compass" size={17} /><span>선택 보기</span></button>
       </nav>
-      <div className="header-actions"><AutosaveStatus status={autosave.status} onOpen={autosave.showProjects} onRetry={() => autosave.flush().catch(() => {})} /><span className="save-state">{saved ? '저장됨' : '로컬 프로젝트'}</span><button aria-label="도시 파일 불러오기" title="도시 파일 불러오기" onClick={() => fileInput.current.click()}><Icon name="folder" size={18} /></button><button aria-label="도시 파일 내보내기" title="도시 파일 내보내기" onClick={() => setExportOpen(true)}><Icon name="download" size={18} /></button><button className="save-button" onClick={save}><Icon name="save" size={16} /> 도시 저장</button></div><input type="file" accept=".json" ref={fileInput} hidden onChange={importCity} />
+      <div className="header-actions">{pageSession ? <button className="save-state" onClick={showProjects} title={projectSaveStatus}>{projectSaveStatus?.startsWith('자동 저장 실패') ? '자동 저장 실패' : '씬 프로젝트'}</button> : <AutosaveStatus status={autosave.status} onOpen={showProjects} onRetry={() => autosave.flush().catch(() => {})} />}<span className="save-state">{saved ? '저장됨' : '로컬 프로젝트'}</span><button aria-label="도시 파일 불러오기" title="도시 파일 불러오기" onClick={() => fileInput.current.click()}><Icon name="folder" size={18} /></button><button aria-label="도시 파일 내보내기" title="도시 파일 내보내기" onClick={() => setExportOpen(true)}><Icon name="download" size={18} /></button><button className="save-button" onClick={save}><Icon name="save" size={16} /> {pageSession ? '프로젝트 저장' : '도시 저장'}</button></div><input type="file" accept=".json" ref={fileInput} hidden onChange={importCity} />
     </header>
     <div className="world-heading"><span className="eyebrow">YOUR NEXT GREAT CITY</span><h1>부지에서 시작하는 나의 도시.</h1><p>격자 위에 부지를 놓고, 그 안에 도시를 채워 보세요.</p><div className="getting-started"><button className={category === 'plot' ? 'current' : ''} onClick={() => selectCategory('plot')}><span>01</span> 부지 조성</button><i>→</i><button className={['residential', 'commercial', 'industrial', 'landmark', 'power', 'water', 'nature'].includes(category) ? 'current' : ''} onClick={() => selectCategory('residential')}><span>02</span> 시설 배치</button><i>→</i><button className={category === 'road' ? 'current' : ''} onClick={() => selectCategory('road')}><span>03</span> 도로 연결</button></div></div>
     <aside className="world-summary glass"><div className="panel-label"><span className="live-dot" /> 도시 개요 <span>SANDBOX</span></div><div className="summary-primary"><Icon name="people" size={22} /><strong>{population.toLocaleString()}</strong><span>주거 수용 인원</span></div><div className="summary-grid"><div><b>{buildings}</b><span>건물</span></div><div><b>{city.roads.length}</b><span>도로 구간</span></div><div><b>{greens}</b><span>녹지 시설</span></div></div><div className="summary-utilities"><span><Icon name="power" size={13} /> 전력 <b>{service.totals.power}/{service.totals.consumers}</b></span><span><Icon name="water" size={13} /> 수도 <b>{service.totals.water}/{service.totals.consumers}</b></span><span><Icon name="fire" size={13} /> 소방 <b>{fire.totals.covered}/{fire.totals.buildings}</b></span></div><button className="summary-diagnostics" onClick={() => setDiagnosticsOpen(true)}>도시 진단 <b>{diagnostics.issues.length}</b><Icon name="info" size={13} /></button></aside>

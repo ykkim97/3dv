@@ -43,6 +43,7 @@ import { performanceControls } from './performance/performanceControls.js';
 import { DEFAULT_QUALITY } from './performance/renderQuality.js';
 import { nextFrameTime } from './performance/frameTiming.js';
 import { waypointInteraction } from '../connections/waypointInteraction.js';
+import { portalRendering } from '../pages/portalRendering.js';
 
 export class CityEngine {
   constructor(canvas, onChange, onSelect, onMessage, onBrushMove, onRenderError) {
@@ -120,7 +121,7 @@ export class CityEngine {
       try {
         this.tickDaylight(delta);
         if (this.renderQuality.motion) { this.tickConnections(delta); this.life?.tick(Math.min(0.06, delta)); }
-        this.scene.render(); this.recordFrame(now, performance.now() - now);
+        this.scene.render(); this.refreshPortalHover(); this.recordFrame(now, performance.now() - now);
       }
       catch (error) {
         if (!this.renderErrorReported) { this.renderErrorReported = true; this.onRenderError?.(`3D 장면 렌더링 오류: ${error.message}`); }
@@ -239,6 +240,7 @@ export class CityEngine {
       }
     }
     this.updateDistricts();
+    this.updatePortals();
     this.updateConnections(terrainChanged);
     this.refreshInfoOverlay();
     this.updateServiceGuides();
@@ -247,6 +249,11 @@ export class CityEngine {
     if (this.sun && this.ambient) this.setTimeOfDay(this.hour ?? 12);
   }
   dispose() {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.renderPaused = true;
+    this.engine.stopRenderLoop();
+    this.camera.detachControl();
     this.finishWaypointPointer(null, true);
     this.setPerformanceMonitoring(false);
     this.clearServiceBadges();
@@ -258,3 +265,4 @@ export class CityEngine {
 }
 
 Object.assign(CityEngine.prototype, assetBuilders, plotBuilder, roadBuilder, terrainRendering, cityOverlays, waterRendering, placementPreview, placementCommands, pointerControls, selection, cameraControls, lightingSystem, connectionRendering, serviceBadges, performanceControls, waypointInteraction);
+Object.assign(CityEngine.prototype, portalRendering);
